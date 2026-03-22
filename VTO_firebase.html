@@ -1979,6 +1979,35 @@ function renderBaixadas() {
   }).join('');
 }
 
+function exportCSV() {
+  const recs = getFiltered();
+  if (!recs.length) { alert('Nenhum registro para exportar.'); return; }
+  const rows = [['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
+    '1ª Data','1ª Hora','1ª Resultado',
+    '2ª Data','2ª Hora','2ª Resultado',
+    '3ª Data','3ª Hora','3ª Resultado',
+    'Resultado Final','Status','Baixada','Tipo Baixa','Data Baixa',
+    'Última Atualização','Atualizado por']];
+  recs.forEach(r => {
+    rows.push([
+      r.municipio||'', r.matricula||'', r.protocolo||'', r.servico||'',
+      r.abertura||'', r.vencimento||'',
+      r.v1_data||'', r.v1_hora||'', r.v1_resultado||'',
+      r.v2_data||'', r.v2_hora||'', r.v2_resultado||'',
+      r.v3_data||'', r.v3_hora||'', r.v3_resultado||'',
+      r.resultado_final||'', calcStatus(r),
+      r.baixada ? 'SIM' : 'NÃO', r.baixada_tipo||'', r.baixada_em||'',
+      r._ultima_atualizacao ? new Date(r._ultima_atualizacao.quando).toLocaleString('pt-BR') : '',
+      r._ultima_atualizacao ? r._ultima_atualizacao.quem : ''
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  a.download = 'VTO_Exportacao_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
 function exportIrregDashCSV() {
   const irreg = getFiltered()
     .filter(r => calcStatus(r)==='Finalizada irregular, Reagendamento')
