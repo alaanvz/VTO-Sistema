@@ -10,6 +10,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
   import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCCOPhLawxkyXgOUORpzriv2uZxaj4F6fA",
@@ -20,9 +21,83 @@
     appId: "1:1064817744634:web:a5e668f89926b565150743"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  const app  = initializeApp(firebaseConfig);
+  const db   = getFirestore(app);
+  const auth = getAuth(app);
   const DOC_REF = doc(db, "vto", "ubirata_records");
+
+  // ── Auth: controla visibilidade do app ──────────────────
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      document.getElementById('login-overlay').style.display = 'none';
+      document.getElementById('app-root').style.display = 'flex';
+      // Mostra e-mail do usuário na sidebar
+      const el = document.getElementById('auth-user-email');
+      if (el) el.textContent = user.email;
+      // Carrega nome do operador salvo
+      const nomeInput = document.getElementById('operador-nome');
+      if (nomeInput) nomeInput.value = localStorage.getItem('vto_operador_nome') || '';
+      // Dispara carregamento dos dados agora que o usuário está autenticado
+      if (!window._appInitialized) {
+        window._appInitialized = true;
+        if (window._fbReady) {
+          loadRecords();
+        } else {
+          document.addEventListener('firebase-ready', () => loadRecords());
+        }
+      }
+    } else {
+      document.getElementById('login-overlay').style.display = 'flex';
+      document.getElementById('app-root').style.display = 'none';
+    }
+  });
+
+  // ── Login ────────────────────────────────────────────────
+  window._fbLogin = async function() {
+    const email  = document.getElementById('li-email').value.trim();
+    const senha  = document.getElementById('li-senha').value;
+    const btn    = document.getElementById('li-btn');
+    const errBox = document.getElementById('li-error');
+    errBox.style.display = 'none';
+
+    if (!email || !senha) {
+      errBox.textContent = 'Preencha e-mail e senha.';
+      errBox.style.display = 'block';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithEmailAndPassword(auth, email, senha);
+    } catch(e) {
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+      const msgs = {
+        'auth/invalid-credential':      'E-mail ou senha incorretos.',
+        'auth/user-not-found':          'Usuário não encontrado.',
+        'auth/wrong-password':          'Senha incorreta.',
+        'auth/invalid-email':           'E-mail inválido.',
+        'auth/too-many-requests':       'Muitas tentativas. Aguarde alguns minutos.',
+        'auth/network-request-failed':  'Sem conexão. Verifique sua internet.',
+      };
+      errBox.textContent = msgs[e.code] || 'Erro ao entrar. Tente novamente.';
+      errBox.style.display = 'block';
+    }
+  };
+
+  // ── Logout ───────────────────────────────────────────────
+  window._fbLogout = async function() {
+    if (!confirm('Deseja sair do sistema?')) return;
+    await signOut(auth);
+  };
+
+  // ── Enter no formulário de login ─────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && document.getElementById('login-overlay').style.display !== 'none') {
+      window._fbLogin();
+    }
+  });
 
   // Expõe funções para o escopo global
   window._fbSave = async function(records) {
@@ -268,6 +343,101 @@ select:focus{border-color:var(--accent);}
 </style>
 </head>
 <body>
+
+<!-- ══════════════════════════════════════════════
+     TELA DE LOGIN — visível até autenticação
+════════════════════════════════════════════════ -->
+<div id="login-overlay" style="
+  display:flex; position:fixed; inset:0; z-index:9999;
+  background:#0d0f14; align-items:center; justify-content:center;
+  font-family:'IBM Plex Sans',sans-serif;
+">
+  <!-- grade de fundo -->
+  <div style="
+    position:absolute; inset:0; pointer-events:none;
+    background-image: linear-gradient(rgba(59,130,246,.04) 1px,transparent 1px),
+                      linear-gradient(90deg,rgba(59,130,246,.04) 1px,transparent 1px);
+    background-size:40px 40px;
+  "></div>
+  <!-- brilho central -->
+  <div style="
+    position:absolute; width:500px; height:500px; border-radius:50%;
+    background:radial-gradient(circle,rgba(59,130,246,.1) 0%,transparent 70%);
+    top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none;
+  "></div>
+
+  <div style="
+    position:relative; z-index:1; width:100%; max-width:380px; margin:1rem;
+    background:#141720; border:1px solid #1e2330; border-radius:16px;
+    padding:36px 32px 32px;
+    box-shadow:0 32px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(59,130,246,.05);
+  ">
+    <!-- Logo -->
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+      <div style="
+        width:38px; height:38px; flex-shrink:0; border-radius:9px;
+        background:linear-gradient(135deg,#3b82f6,#6c4fff);
+        display:flex; align-items:center; justify-content:center;
+        font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:#fff; letter-spacing:-.5px;
+      ">VTO</div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; letter-spacing:2px; color:#e8ecf5; line-height:1;">VTO</div>
+        <div style="font-size:11px; color:#6b7694; margin-top:3px;">Sistema de Controle</div>
+      </div>
+    </div>
+    <div style="height:1px; background:#1e2330; margin-bottom:24px;"></div>
+
+    <div style="font-size:15px; font-weight:500; color:#e8ecf5; margin-bottom:4px;">Entrar na sua conta</div>
+    <div style="font-size:13px; color:#6b7694; margin-bottom:24px;">Acesso restrito a usuários autorizados.</div>
+
+    <!-- Campos -->
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:#6b7694; margin-bottom:6px;">E-mail</label>
+      <input id="li-email" type="email" placeholder="seu@email.com" autocomplete="username" style="
+        width:100%; background:#0d0f14; border:1px solid #1e2330; border-radius:7px;
+        padding:10px 13px; color:#e8ecf5; font-family:'IBM Plex Sans',sans-serif;
+        font-size:14px; outline:none; transition:border-color .2s, box-shadow .2s;
+      " onfocus="this.style.borderColor='#3b82f6';this.style.boxShadow='0 0 0 3px rgba(59,130,246,.15)'"
+         onblur="this.style.borderColor='#1e2330';this.style.boxShadow='none'">
+    </div>
+    <div style="margin-bottom:8px;">
+      <label style="display:block; font-size:10px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:#6b7694; margin-bottom:6px;">Senha</label>
+      <input id="li-senha" type="password" placeholder="••••••••" autocomplete="current-password" style="
+        width:100%; background:#0d0f14; border:1px solid #1e2330; border-radius:7px;
+        padding:10px 13px; color:#e8ecf5; font-family:'IBM Plex Sans',sans-serif;
+        font-size:14px; outline:none; transition:border-color .2s, box-shadow .2s;
+      " onfocus="this.style.borderColor='#3b82f6';this.style.boxShadow='0 0 0 3px rgba(59,130,246,.15)'"
+         onblur="this.style.borderColor='#1e2330';this.style.boxShadow='none'">
+    </div>
+
+    <!-- Erro -->
+    <div id="li-error" style="
+      display:none; margin-bottom:10px; padding:9px 12px; border-radius:7px;
+      background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.25);
+      color:#ff7090; font-size:13px;
+    "></div>
+
+    <!-- Botão -->
+    <button id="li-btn" onclick="window._fbLogin()" style="
+      width:100%; margin-top:6px; padding:11px;
+      background:#3b82f6; color:#fff; border:none; border-radius:7px;
+      font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:500;
+      cursor:pointer; transition:background .2s, box-shadow .2s; letter-spacing:.2px;
+    "
+      onmouseover="this.style.background='#5c9bff';this.style.boxShadow='0 4px 20px rgba(59,130,246,.35)'"
+      onmouseout="this.style.background='#3b82f6';this.style.boxShadow='none'"
+    >Entrar</button>
+
+    <div style="margin-top:24px; text-align:center; font-size:11px; color:#6b7694; font-family:'IBM Plex Mono',monospace; letter-spacing:.5px;">
+      VTO · Sanepar · Acesso autorizado
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     APP PRINCIPAL — oculto até login
+════════════════════════════════════════════════ -->
+<div id="app-root" style="display:none; width:100%; height:100vh;">
 <div class="app">
 <aside class="sidebar">
   <div class="sidebar-logo">
@@ -351,6 +521,38 @@ select:focus{border-color:var(--accent);}
     <p>Hoje: <span class="hl" id="today-date"></span></p>
     <p style="margin-top:3px;" id="total-count"></p>
     <p style="margin-top:3px;color:var(--green);font-size:10px;" id="save-status"></p>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+      <p style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px;" id="auth-user-email"></p>
+      <!-- Campo de nome do operador -->
+      <div style="margin-bottom:6px;">
+        <p style="font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:.05em;margin-bottom:4px;">SEU NOME</p>
+        <div style="display:flex;gap:4px;">
+          <input id="operador-nome" type="text" placeholder="Ex: João Silva"
+            value=""
+            style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius);
+                   padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:11px;outline:none;min-width:0;"
+            onfocus="this.style.borderColor='var(--accent)'"
+            onblur="this.style.borderColor='var(--border2)';salvarNomeOperador(this.value)"
+            onkeydown="if(event.key==='Enter'){this.blur();}"
+          >
+          <button onclick="salvarNomeOperador(document.getElementById('operador-nome').value)" title="Salvar nome" style="
+            background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);
+            color:var(--text3);padding:5px 7px;cursor:pointer;font-size:11px;flex-shrink:0;
+          " onmouseover="this.style.borderColor='var(--accent);'" onmouseout="this.style.borderColor='var(--border2)'">✓</button>
+        </div>
+        <p id="nome-save-msg" style="font-size:10px;color:var(--green);margin-top:3px;display:none;">✓ Nome salvo</p>
+      </div>
+      <button onclick="window._fbLogout()" style="
+        width:100%; padding:5px 8px;
+        background:transparent; border:1px solid var(--border2);
+        border-radius:var(--radius); color:var(--text3);
+        font-family:var(--sans); font-size:11px; cursor:pointer;
+        transition:all .15s; text-align:left;
+      "
+        onmouseover="this.style.background='var(--red-bg)';this.style.borderColor='var(--red-border)';this.style.color='var(--red)'"
+        onmouseout="this.style.background='transparent';this.style.borderColor='var(--border2)';this.style.color='var(--text3)'"
+      >⎋ Sair</button>
+    </div>
   </div>
 </aside>
 
@@ -1356,6 +1558,7 @@ function openModal(key) {
     <p style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:10px;text-transform:uppercase;letter-spacing:.07em;">Histórico de visitas</p>
     <div class="timeline">${buildTimeline(r)}</div>
     ${buildNextSteps(r)}
+    ${buildUpdateHistory(r)}
   `;
   // Update footer buttons based on status
   const st = calcStatus(r);
@@ -1473,6 +1676,7 @@ function baixarASE(matricula, municipio, tipo) {
   r.baixada = true;
   r.baixada_tipo = tipo;
   r.baixada_em = new Date().toISOString().slice(0,10);
+  registrarAtualizacao(r, `ASE baixada como "${tipo === 'finalizada' ? 'Finalizada' : 'Reagendada'}"`);
   saveRecords();
   openModal(matricula + '+' + (municipio||r.municipio));
   renderDashboard();
@@ -1586,6 +1790,7 @@ function salvarDatas() {
     if (msg) msg.textContent = 'Nenhuma alteração.';
     return;
   }
+  registrarAtualizacao(r, `Datas editadas — Abertura: ${abertura||r.abertura||'—'}, Vencimento: ${vencimento||r.vencimento||'—'}`);
   saveRecords();
   const msg = document.getElementById('datas-save-msg');
   if (msg) {
@@ -1710,6 +1915,7 @@ function saveVisit() {
   if (obs) r.obs = (r.obs ? r.obs + ' | ' : '') + `[${data}] ${obs}`;
   r.status = calcStatus(r);
 
+  registrarAtualizacao(r, `${visita}ª visita registrada — ${resultado}${obs?' | Obs: '+obs:''}`);
   saveRecords();
   const st = calcStatus(r);
   alert(`✓ Visita registrada com sucesso!\nMatrícula: ${r.matricula}\n${visita}ª visita: ${fmtDate(data)} ${hora}\nResultado: ${resultado}\nStatus: ${st}`);
@@ -2070,6 +2276,102 @@ function calcSimulador() {
 }
 
 
+// ===================== OPERADOR & HISTÓRICO =====================
+
+function getNomeOperador() {
+  return localStorage.getItem('vto_operador_nome') || '';
+}
+
+function salvarNomeOperador(nome) {
+  nome = (nome||'').trim();
+  if (!nome) return;
+  localStorage.setItem('vto_operador_nome', nome);
+  const msg = document.getElementById('nome-save-msg');
+  if (msg) { msg.style.display='block'; setTimeout(()=>{ msg.style.display='none'; }, 2000); }
+}
+
+function registrarAtualizacao(record, descricao) {
+  const nome = getNomeOperador() || 'Não identificado';
+  const agora = new Date();
+  const entrada = {
+    quem:  nome,
+    quando: agora.toISOString(),
+    acao:  descricao
+  };
+  if (!record._historico) record._historico = [];
+  record._historico.push(entrada);
+  // Mantém apenas as últimas 50 entradas por registro
+  if (record._historico.length > 50) record._historico = record._historico.slice(-50);
+  // Última atualização (resumo rápido)
+  record._ultima_atualizacao = {
+    quem:   nome,
+    quando: agora.toISOString(),
+    acao:   descricao
+  };
+}
+
+function buildUpdateHistory(r) {
+  const hist = r._historico;
+  const ultima = r._ultima_atualizacao;
+  if (!ultima && (!hist || !hist.length)) return '';
+
+  const fmtDT = iso => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  };
+
+  // Última atualização — badge compacto
+  let html = `
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+      <p style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:8px;text-transform:uppercase;letter-spacing:.07em;">Registro de atualizações</p>`;
+
+  if (ultima) {
+    html += `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:var(--radius);margin-bottom:10px;">
+        <span style="font-size:14px;">✏</span>
+        <div style="flex:1;min-width:0;">
+          <span style="font-size:12px;color:#60a5fa;font-weight:500;">${ultima.quem}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:6px;font-family:var(--mono);">${fmtDT(ultima.quando)}</span>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ultima.acao}</div>
+        </div>
+        <span style="font-size:10px;color:var(--text3);font-family:var(--mono);flex-shrink:0;padding:2px 7px;border:1px solid var(--blue-border);border-radius:100px;">última atualização</span>
+      </div>`;
+  }
+
+  // Histórico completo expansível
+  if (hist && hist.length > 0) {
+    const reversed = [...hist].reverse();
+    html += `
+      <details style="cursor:pointer;">
+        <summary style="font-size:11px;color:var(--accent);font-family:var(--mono);list-style:none;display:flex;align-items:center;gap:6px;padding:4px 0;user-select:none;">
+          <span>▶</span> Ver histórico completo (${hist.length} ${hist.length===1?'registro':'registros'})
+        </summary>
+        <div style="margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">`;
+
+    reversed.forEach((e, i) => {
+      html += `
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 12px;${i < reversed.length-1 ? 'border-bottom:1px solid var(--border);' : ''}background:${i%2===0?'var(--bg3)':'var(--bg2)'};">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:5px;"></div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:12px;color:var(--text);font-weight:500;">${e.quem}</span>
+                <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${fmtDT(e.quando)}</span>
+              </div>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px;">${e.acao}</div>
+            </div>
+          </div>`;
+    });
+
+    html += `
+        </div>
+      </details>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
 function renderAll() {
   document.getElementById('total-count').textContent=`${RECORDS.length} registros (${new Set(RECORDS.map(r=>r.municipio)).size} mun.)`;
   renderDashboard(); renderPendentes(); renderIrregulares(); renderSanepar();
@@ -2257,15 +2559,11 @@ function processFile(file) {
 // ===================== INIT =====================
 document.getElementById('today-date').textContent = TODAY.toLocaleDateString('pt-BR');
 
-// Aguarda o Firebase estar pronto antes de carregar
-if (window._fbReady) {
-  loadRecords();
-} else {
-  document.addEventListener('firebase-ready', () => {
-    loadRecords();
-  });
-}
+// loadRecords é chamado pelo onAuthStateChanged quando o usuário loga.
+// Apenas inicializa o seletor de mês aqui.
 populateMonthSelector();
 </script>
+</div><!-- .app -->
+</div><!-- #app-root -->
 </body>
 </html>
