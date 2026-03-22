@@ -1433,20 +1433,97 @@ function marcarNotificado(matricula) {
   renderDashboard();
 }
 
+// ── Utilitário XLSX compartilhado ─────────────────────────
+function _xlsxDownload(wb, filename) {
+  const out  = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
+  const blob = new Blob([out], { type:'application/octet-stream' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function _xlsxColors() {
+  return {
+    bgDark:'0F1117', bgMed:'161920', bgLight:'1E2228',
+    accent:'3B82F6', accentDk:'1D4ED8',
+    green:'22C55E',  greenBg:'052E16',
+    amber:'F59E0B',  amberBg:'2D1A00',
+    red:'EF4444',    redBg:'2D0A0A',
+    teal:'14B8A6',   tealBg:'042F2E',
+    white:'E8EAF0',  gray:'9AA0B0',  darkGray:'5A6070',
+    hBg:'1D4ED8',    border:'2E333D',
+  };
+}
+
+function _xlsxSH(C, fg, bg, sz=10, bold=true, align='center') {
+  return { font:{bold,color:{rgb:fg},name:'Arial',sz},
+           fill:{fgColor:{rgb:bg}},
+           alignment:{horizontal:align,vertical:'center',wrapText:true},
+           border:{bottom:{style:'thin',color:{rgb:C.border}}} };
+}
+function _xlsxSC(C, fg, bg, bold=false, align='left') {
+  return { font:{color:{rgb:fg},name:'Arial',sz:10,bold},
+           fill:{fgColor:{rgb:bg}},
+           alignment:{horizontal:align,vertical:'center'},
+           border:{bottom:{style:'hair',color:{rgb:C.border}}} };
+}
+function _xlsxTitle(C, text, subtitle) {
+  const ws = {};
+  ws[XLSX.utils.encode_cell({r:0,c:0})] = { v:text, t:'s',
+    s:{ font:{bold:true,color:{rgb:C.white},name:'Arial',sz:15},
+        fill:{fgColor:{rgb:C.bgDark}}, alignment:{horizontal:'left',vertical:'center'} }};
+  ws[XLSX.utils.encode_cell({r:1,c:0})] = { v:subtitle, t:'s',
+    s:{ font:{color:{rgb:C.gray},name:'Arial',sz:9},
+        fill:{fgColor:{rgb:C.bgDark}}, alignment:{horizontal:'left'} }};
+  return ws;
+}
+
+// ── Exportar Sanepar ──────────────────────────────────────
 function exportarSanepar() {
+  const C     = _xlsxColors();
   const cases = getFiltered().filter(r => needsSanepar(r));
   if (!cases.length) { alert('Nenhum caso pendente para exportar.'); return; }
-  const rows = [['Município','Matrícula','Protocolo','Serviço','Resultado','Notificação']];
-  cases.forEach(r => rows.push([
-    r.municipio||'', r.matricula, r.protocolo||'',
-    r.servico||'', r.v3_resultado||r.v2_resultado||r.v1_resultado||'',
-    needsSanepar(r)
-  ]));
-  const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
-  a.download = `Sanepar_Notificacao_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
+
+  const wb = XLSX.utils.book_new();
+  const ws = _xlsxTitle(C,
+    'VTO — Notificações Sanepar',
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}   |   Sanepar / Acciona`
+  );
+
+  const hdrs = ['Município','Matrícula','Protocolo','Serviço','Última Visita','Resultado','Notificação Necessária','Já Notificado'];
+  let row = 3;
+  hdrs.forEach((h,i) => {
+    ws[XLSX.utils.encode_cell({r:row-1,c:i})] = { v:h, t:'s', s:_xlsxSH(C,C.white,C.hBg) };
+  });
+  row++;
+
+  cases.sort((a,b) => (a.municipio||'').localeCompare(b.municipio||''));
+  cases.forEach((r,idx) => {
+    const bg   = idx%2===0 ? C.bgDark : C.bgMed;
+    const last = r.v3_resultado||r.v2_resultado||r.v1_resultado||'';
+    const lastD= r.v3_data||r.v2_data||r.v1_data||'';
+    const notif= needsSanepar(r);
+    [
+      {v:r.municipio||'',  fg:C.white, bold:true},
+      {v:r.matricula||'',  fg:C.accent},
+      {v:r.protocolo||'',  fg:C.gray},
+      {v:r.servico||'',    fg:C.gray, align:'center'},
+      {v:lastD,            fg:C.gray, align:'center'},
+      {v:last,             fg:C.amber},
+      {v:notif||'',        fg:C.red,  bold:true},
+      {v:r.sanepar_notificado?'✓ Sim':'Pendente', fg:r.sanepar_notificado?C.green:C.amber, align:'center'},
+    ].forEach((cell,i) => {
+      ws[XLSX.utils.encode_cell({r:row-1,c:i})] = { v:cell.v, t:'s',
+        s:_xlsxSC(C, cell.fg||C.gray, bg, cell.bold||false, cell.align||'left') };
+    });
+    row++;
+  });
+
+  ws['!ref']  = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:row,c:7}});
+  ws['!cols'] = [{wch:24},{wch:14},{wch:18},{wch:10},{wch:14},{wch:36},{wch:28},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, '🔴 Notificações Sanepar');
+  _xlsxDownload(wb, `VTO_Sanepar_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function renderSanepar() {
@@ -1459,7 +1536,7 @@ function renderSanepar() {
   } else {
     out += `<div class="alert-bar danger" style="margin-bottom:6px;">🔴 ${cases.length} caso(s) aguardando notificação</div>`;
     out += `<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-      <button class="btn btn-ghost btn-sm" onclick="exportarSanepar()">↓ Exportar lista CSV</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportarSanepar()">↓ Exportar lista XLSX</button>
     </div>`;
     out += cases.map(r => {
       const san = needsSanepar(r);
@@ -1979,36 +2056,100 @@ function renderBaixadas() {
   }).join('');
 }
 
+// ── Exportar Todas as ASEs (Dashboard) ───────────────────
 function exportCSV() {
+  const C    = _xlsxColors();
   const recs = getFiltered();
   if (!recs.length) { alert('Nenhum registro para exportar.'); return; }
-  const rows = [['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
-    '1ª Data','1ª Hora','1ª Resultado',
-    '2ª Data','2ª Hora','2ª Resultado',
-    '3ª Data','3ª Hora','3ª Resultado',
-    'Resultado Final','Status','Baixada','Tipo Baixa','Data Baixa',
-    'Última Atualização','Atualizado por']];
+
+  const wb  = XLSX.utils.book_new();
+
+  // ── Aba resumo por status ──
+  const wsRes = _xlsxTitle(C,
+    'VTO — Exportação Geral de ASEs',
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}   |   ${recs.length} registros   |   Sanepar / Acciona`
+  );
+  const statusGroups = {};
   recs.forEach(r => {
-    rows.push([
-      r.municipio||'', r.matricula||'', r.protocolo||'', r.servico||'',
-      r.abertura||'', r.vencimento||'',
-      r.v1_data||'', r.v1_hora||'', r.v1_resultado||'',
-      r.v2_data||'', r.v2_hora||'', r.v2_resultado||'',
-      r.v3_data||'', r.v3_hora||'', r.v3_resultado||'',
-      r.resultado_final||'', calcStatus(r),
-      r.baixada ? 'SIM' : 'NÃO', r.baixada_tipo||'', r.baixada_em||'',
-      r._ultima_atualizacao ? new Date(r._ultima_atualizacao.quando).toLocaleString('pt-BR') : '',
-      r._ultima_atualizacao ? r._ultima_atualizacao.quem : ''
-    ]);
+    const st = calcStatus(r);
+    if (!statusGroups[st]) statusGroups[st] = 0;
+    statusGroups[st]++;
   });
-  const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
-  a.download = 'VTO_Exportacao_' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
+  const stHdrs = ['Status','Quantidade','% do Total'];
+  let r0 = 3;
+  stHdrs.forEach((h,i) => {
+    wsRes[XLSX.utils.encode_cell({r:r0-1,c:i})] = { v:h, t:'s', s:_xlsxSH(C,C.white,C.hBg) };
+  });
+  r0++;
+  Object.entries(statusGroups).sort((a,b)=>b[1]-a[1]).forEach(([st,cnt],idx) => {
+    const bg  = idx%2===0?C.bgDark:C.bgMed;
+    const pct = (cnt/recs.length*100).toFixed(1)+'%';
+    const fg  = st.includes('Sucesso')?C.green:st.includes('irregular')?C.amber:st.includes('Pendente')?C.accent:C.gray;
+    [{v:st,fg,bold:true},{v:cnt,fg:C.white,align:'center'},{v:pct,fg,align:'center'}].forEach((cell,i) => {
+      wsRes[XLSX.utils.encode_cell({r:r0-1,c:i})] = { v:cell.v, t:typeof cell.v==='number'?'n':'s',
+        s:_xlsxSC(C,cell.fg,bg,cell.bold||false,cell.align||'left') };
+    });
+    r0++;
+  });
+  wsRes['!ref']  = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:r0,c:2}});
+  wsRes['!cols'] = [{wch:36},{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsRes, '📊 Resumo');
+
+  // ── Aba detalhada ──
+  const wsDet = _xlsxTitle(C,
+    'Todas as ASEs — Detalhado',
+    `Filtro ativo: ${document.getElementById('mun-filter')?.value||'Todos os municípios'}`
+  );
+  const hdrs = ['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
+    '1ª Data','1ª Resultado','2ª Data','2ª Resultado','3ª Data','3ª Resultado',
+    'Resultado Final','Status','Baixada','Tipo Baixa','Data Baixa','Última Atualiz.','Atualizado por'];
+  let r1 = 3;
+  hdrs.forEach((h,i) => {
+    wsDet[XLSX.utils.encode_cell({r:r1-1,c:i})] = { v:h, t:'s', s:_xlsxSH(C,C.white,C.hBg,9) };
+  });
+  r1++;
+  recs.forEach((r,idx) => {
+    const bg  = idx%2===0?C.bgDark:C.bgMed;
+    const st  = calcStatus(r);
+    const stFg= st.includes('Sucesso')?C.green:st.includes('irregular')?C.amber:st.includes('Pendente')?C.accent:C.gray;
+    [
+      {v:r.municipio||'',        fg:C.white, bold:true},
+      {v:r.matricula||'',        fg:C.accent},
+      {v:r.protocolo||'',        fg:C.gray},
+      {v:r.servico||'',          fg:C.gray,  align:'center'},
+      {v:r.abertura||'',         fg:C.gray,  align:'center'},
+      {v:r.vencimento||'',       fg:C.gray,  align:'center'},
+      {v:r.v1_data||'',          fg:C.gray,  align:'center'},
+      {v:r.v1_resultado||'',     fg:C.gray},
+      {v:r.v2_data||'',          fg:C.gray,  align:'center'},
+      {v:r.v2_resultado||'',     fg:C.gray},
+      {v:r.v3_data||'',          fg:C.gray,  align:'center'},
+      {v:r.v3_resultado||'',     fg:C.gray},
+      {v:r.resultado_final||'',  fg:stFg},
+      {v:st,                     fg:stFg},
+      {v:r.baixada?'SIM':'NÃO',  fg:r.baixada?C.green:C.gray, align:'center'},
+      {v:r.baixada_tipo||'',     fg:C.gray,  align:'center'},
+      {v:r.baixada_em||'',       fg:C.gray,  align:'center'},
+      {v:r._ultima_atualizacao?new Date(r._ultima_atualizacao.quando).toLocaleString('pt-BR'):'', fg:C.gray, align:'center'},
+      {v:r._ultima_atualizacao?.quem||'', fg:C.accent},
+    ].forEach((cell,i) => {
+      wsDet[XLSX.utils.encode_cell({r:r1-1,c:i})] = { v:cell.v, t:'s',
+        s:_xlsxSC(C,cell.fg,bg,cell.bold||false,cell.align||'left') };
+    });
+    r1++;
+  });
+  wsDet['!ref']  = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:r1,c:18}});
+  wsDet['!cols'] = [{wch:22},{wch:14},{wch:18},{wch:10},{wch:12},{wch:12},
+    {wch:12},{wch:34},{wch:12},{wch:34},{wch:12},{wch:34},
+    {wch:34},{wch:30},{wch:8},{wch:12},{wch:12},{wch:18},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsDet, '📋 ASEs Detalhado');
+
+  _xlsxDownload(wb, `VTO_ASEs_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
+// ── Exportar Irregulares ──────────────────────────────────
 function exportIrregDashCSV() {
+  const C    = _xlsxColors();
   const irreg = getFiltered()
     .filter(r => calcStatus(r)==='Finalizada irregular, Reagendamento')
     .sort((a,b) => {
@@ -2017,44 +2158,131 @@ function exportIrregDashCSV() {
       return (da===null?99999:da)-(db===null?99999:db);
     });
   if (!irreg.length) { alert('Nenhuma irregular para exportar.'); return; }
-  const rows = [['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
-    'Última Visita','Irregularidade','Próxima ASE','Dias p/ Próxima']];
-  irreg.forEach(r => {
-    const lastDate = r.v3_data||r.v2_data||r.v1_data||'';
-    const nextAse  = addDays(lastDate, 60);
-    const dNext    = daysFrom(nextAse);
-    rows.push([
-      r.municipio||'', r.matricula, r.protocolo||'', r.servico||'',
-      r.abertura||'', r.vencimento||'',
-      lastDate, r.resultado_final||r.v1_resultado||'',
-      nextAse||'', dNext!==null ? dNext : ''
-    ]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = _xlsxTitle(C,
+    'VTO — Irregulares Aguardando Nova ASE',
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}   |   ${irreg.length} registros   |   Sanepar / Acciona`
+  );
+
+  const hdrs = ['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
+    'Última Visita','Irregularidade','Próxima ASE','Dias p/ Próxima','Urgência'];
+  let row = 3;
+  hdrs.forEach((h,i) => {
+    ws[XLSX.utils.encode_cell({r:row-1,c:i})] = { v:h, t:'s', s:_xlsxSH(C,C.white,C.hBg) };
   });
-  const csv = rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download = 'Irregulares_'+new Date().toISOString().slice(0,10)+'.csv';
-  a.click();
+  row++;
+
+  irreg.forEach((r,idx) => {
+    const bg      = idx%2===0?C.bgDark:C.bgMed;
+    const lastDate= r.v3_data||r.v2_data||r.v1_data||'';
+    const nextAse = addDays(lastDate, 60);
+    const dNext   = daysFrom(nextAse);
+    const urgencia= dNext===null?'—':dNext<0?'🔴 Vencida':dNext<=7?'🟠 Urgente':dNext<=30?'🟡 Atenção':'🟢 OK';
+    const urgFg   = dNext===null?C.gray:dNext<0?C.red:dNext<=7?C.amber:dNext<=30?C.amber:C.green;
+    [
+      {v:r.municipio||'',                   fg:C.white, bold:true},
+      {v:r.matricula||'',                   fg:C.accent},
+      {v:r.protocolo||'',                   fg:C.gray},
+      {v:r.servico||'',                     fg:C.gray,  align:'center'},
+      {v:r.abertura||'',                    fg:C.gray,  align:'center'},
+      {v:r.vencimento||'',                  fg:C.gray,  align:'center'},
+      {v:lastDate,                          fg:C.gray,  align:'center'},
+      {v:r.resultado_final||r.v1_resultado||'', fg:C.amber},
+      {v:nextAse||'',                       fg:urgFg,   align:'center'},
+      {v:dNext!==null?dNext:'', fg:urgFg,   align:'center'},
+      {v:urgencia,                          fg:urgFg,   bold:true, align:'center'},
+    ].forEach((cell,i) => {
+      ws[XLSX.utils.encode_cell({r:row-1,c:i})] = { v:cell.v, t:typeof cell.v==='number'?'n':'s',
+        s:_xlsxSC(C,cell.fg,bg,cell.bold||false,cell.align||'left') };
+    });
+    row++;
+  });
+
+  ws['!ref']  = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:row,c:10}});
+  ws['!cols'] = [{wch:24},{wch:14},{wch:18},{wch:10},{wch:12},{wch:12},
+    {wch:14},{wch:36},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, '⚠ Irregulares');
+  _xlsxDownload(wb, `VTO_Irregulares_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
+// ── Exportar ASEs Baixadas ────────────────────────────────
 function exportBaixadasCSV() {
+  const C      = _xlsxColors();
   const baixadas = RECORDS.filter(r => r.baixada);
   if (!baixadas.length) { alert('Nenhuma ASE baixada para exportar.'); return; }
-  const rows = [['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
-    '1ª Data','1ª Resultado','2ª Data','2ª Resultado','3ª Data','3ª Resultado',
-    'Resultado Final','Tipo Baixa','Data Baixa','Próxima ASE']];
-  baixadas.forEach(r => {
-    const lastDate = r.v3_data||r.v2_data||r.v1_data||'';
-    const nextAse = r.baixada_tipo==='reagendada' ? addDays(lastDate,60) : '';
-    rows.push([r.municipio||'',r.matricula,r.protocolo||'',r.servico||'',
-      r.abertura||'',r.vencimento||'',
-      r.v1_data||'',r.v1_resultado||'',r.v2_data||'',r.v2_resultado||'',
-      r.v3_data||'',r.v3_resultado||'',r.resultado_final||'',
-      r.baixada_tipo||'',r.baixada_em||'',nextAse||'']);
+
+  const wb  = XLSX.utils.book_new();
+
+  // Aba resumo
+  const wsRes = _xlsxTitle(C,
+    'VTO — ASEs Baixadas',
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}   |   ${baixadas.length} ASEs baixadas   |   Sanepar / Acciona`
+  );
+  const finalizadas  = baixadas.filter(r=>r.baixada_tipo==='finalizada').length;
+  const reagendadas  = baixadas.filter(r=>r.baixada_tipo==='reagendada').length;
+  let r0 = 3;
+  [['Total Baixadas',baixadas.length,C.accent],
+   ['Finalizadas',finalizadas,C.green],
+   ['Reagendadas',reagendadas,C.amber]].forEach(([label,val,fg],idx) => {
+    const bg = idx%2===0?C.bgDark:C.bgMed;
+    [{v:label,fg:C.gray,bold:true},{v:val,fg,bold:true,align:'center'}].forEach((cell,i) => {
+      wsRes[XLSX.utils.encode_cell({r:r0-1,c:i})] = { v:cell.v, t:typeof cell.v==='number'?'n':'s',
+        s:_xlsxSC(C,cell.fg,bg,cell.bold,cell.align||'left') };
+    });
+    r0++;
   });
-  const csv = rows.map(r=>r.map(c=>'"'+(c||'').toString().replace(/"/g,'""')+'"').join(',')).join('\n');
-  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download='ASEs_Baixadas_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+  wsRes['!ref']  = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:r0,c:1}});
+  wsRes['!cols'] = [{wch:20},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsRes, '📊 Resumo');
+
+  // Aba detalhada
+  const wsDet = _xlsxTitle(C, 'ASEs Baixadas — Detalhado', '');
+  const hdrs  = ['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
+    '1ª Data','1ª Resultado','2ª Data','2ª Resultado','3ª Data','3ª Resultado',
+    'Resultado Final','Tipo Baixa','Data Baixa','Próxima ASE','Dias p/ Próxima'];
+  let r1 = 3;
+  hdrs.forEach((h,i) => {
+    wsDet[XLSX.utils.encode_cell({r:r1-1,c:i})] = { v:h, t:'s', s:_xlsxSH(C,C.white,C.hBg,9) };
+  });
+  r1++;
+  baixadas.sort((a,b)=>(b.baixada_em||'').localeCompare(a.baixada_em||'')).forEach((r,idx) => {
+    const bg      = idx%2===0?C.bgDark:C.bgMed;
+    const lastDate= r.v3_data||r.v2_data||r.v1_data||'';
+    const nextAse = r.baixada_tipo==='reagendada' ? addDays(lastDate,60) : '';
+    const dNext   = nextAse ? daysFrom(nextAse) : null;
+    const tipoBg  = r.baixada_tipo==='finalizada'?C.green:C.amber;
+    [
+      {v:r.municipio||'',       fg:C.white, bold:true},
+      {v:r.matricula||'',       fg:C.accent},
+      {v:r.protocolo||'',       fg:C.gray},
+      {v:r.servico||'',         fg:C.gray,  align:'center'},
+      {v:r.abertura||'',        fg:C.gray,  align:'center'},
+      {v:r.vencimento||'',      fg:C.gray,  align:'center'},
+      {v:r.v1_data||'',         fg:C.gray,  align:'center'},
+      {v:r.v1_resultado||'',    fg:C.gray},
+      {v:r.v2_data||'',         fg:C.gray,  align:'center'},
+      {v:r.v2_resultado||'',    fg:C.gray},
+      {v:r.v3_data||'',         fg:C.gray,  align:'center'},
+      {v:r.v3_resultado||'',    fg:C.gray},
+      {v:r.resultado_final||'', fg:C.amber},
+      {v:r.baixada_tipo==='finalizada'?'✓ Finalizada':'⏱ Reagendada', fg:tipoBg, bold:true, align:'center'},
+      {v:r.baixada_em||'',      fg:C.green, align:'center'},
+      {v:nextAse||'—',          fg:dNext!==null&&dNext<0?C.red:C.gray, align:'center'},
+      {v:dNext!==null?dNext:'—',fg:dNext!==null&&dNext<0?C.red:C.gray, align:'center'},
+    ].forEach((cell,i) => {
+      wsDet[XLSX.utils.encode_cell({r:r1-1,c:i})] = { v:cell.v, t:typeof cell.v==='number'?'n':'s',
+        s:_xlsxSC(C,cell.fg,bg,cell.bold||false,cell.align||'left') };
+    });
+    r1++;
+  });
+  wsDet['!ref']  = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:r1,c:16}});
+  wsDet['!cols'] = [{wch:22},{wch:14},{wch:18},{wch:10},{wch:12},{wch:12},
+    {wch:12},{wch:32},{wch:12},{wch:32},{wch:12},{wch:32},
+    {wch:32},{wch:16},{wch:12},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsDet, '📋 Baixadas Detalhado');
+
+  _xlsxDownload(wb, `VTO_Baixadas_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function exportMedicaoCSV() {
