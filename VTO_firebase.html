@@ -2058,31 +2058,261 @@ function exportBaixadasCSV() {
 }
 
 function exportMedicaoCSV() {
-  const month = document.getElementById('mes-select')?.value; if (!month) return;
-  // Collect ALL visits in the selected month with full record data
-  const rows = [['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
-    'Nº Visita','Data Visita','Hora Visita','Resultado','Conta Medição',
-    'Status ASE','Baixada','Tipo Baixa','Data Baixa']];
+  const month = document.getElementById('mes-select')?.value;
+  if (!month) return;
+
+  // ── Coleta dados ──────────────────────────────────────────
+  const visitas = [];
+  const munContagem = {};
+  let totalMedicao = 0, totalBrutas = 0;
+
   RECORDS.forEach(r => {
     [['v1_data','v1_hora','v1_resultado','1ª'],
      ['v2_data','v2_hora','v2_resultado','2ª'],
      ['v3_data','v3_hora','v3_resultado','3ª']].forEach(([dk,hk,rk,num]) => {
       if (r[dk] && r[dk].slice(0,7)===month && r[rk]) {
-        rows.push([
-          r.municipio||'', r.matricula, r.protocolo||'', r.servico||'',
-          r.abertura||'', r.vencimento||'',
-          num, r[dk]||'', r[hk]||'', r[rk]||'',
-          countsMedicao(r[rk]) ? 'SIM' : 'NÃO',
-          calcStatus(r), r.baixada ? 'SIM' : 'NÃO',
-          r.baixada_tipo||'', r.baixada_em||''
-        ]);
+        const conta = countsMedicao(r[rk]);
+        totalBrutas++;
+        if (conta) totalMedicao++;
+        const mun = r.municipio||'Não informado';
+        if (!munContagem[mun]) munContagem[mun] = { brutas:0, medicao:0 };
+        munContagem[mun].brutas++;
+        if (conta) munContagem[mun].medicao++;
+        visitas.push({
+          municipio: mun,
+          matricula: r.matricula||'',
+          protocolo: r.protocolo||'',
+          servico:   r.servico||'',
+          abertura:  r.abertura||'',
+          vencimento:r.vencimento||'',
+          visita:    num,
+          data:      r[dk]||'',
+          hora:      r[hk]||'',
+          resultado: r[rk]||'',
+          medicao:   conta ? 'SIM' : 'NÃO',
+          status:    calcStatus(r),
+          baixada:   r.baixada ? 'SIM' : 'NÃO',
+          tipo_baixa:r.baixada_tipo||'',
+          data_baixa:r.baixada_em||''
+        });
       }
     });
   });
-  if (rows.length <= 1) { alert('Nenhuma vistoria encontrada para o mês selecionado.'); return; }
-  const csv = rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
-  a.download=`Medicao_${month}_completo.csv`; a.click();
+
+  if (!visitas.length) { alert('Nenhuma vistoria encontrada para o mês selecionado.'); return; }
+
+  const fmtMonthLabel = m => {
+    const [y,mo] = m.split('-');
+    return new Date(y, mo-1).toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+  };
+  const mesLabel = fmtMonthLabel(month);
+  const geradoEm = new Date().toLocaleString('pt-BR');
+
+  // ── Cores ─────────────────────────────────────────────────
+  const C = {
+    bgDark:   '0F1117', bgMed:    '161920', bgLight:  '1E2228',
+    accent:   '3B82F6', accentDk: '1D4ED8',
+    green:    '22C55E', greenBg:  '052E16',
+    amber:    'F59E0B', amberBg:  '2D1A00',
+    red:      'EF4444', redBg:    '2D0A0A',
+    teal:     '14B8A6', tealBg:   '042F2E',
+    white:    'E8EAF0', gray:     '9AA0B0', darkGray: '5A6070',
+    headerBg: '1D4ED8', headerFg: 'FFFFFF',
+    rowAlt:   '161920', rowNorm:  '0F1117',
+    border:   '2E333D',
+  };
+
+  const styleHeader = (bold=true, fg=C.white, bg=C.headerBg, sz=11, wrap=false) => ({
+    font:      { bold, color:{ rgb:fg }, name:'Arial', sz },
+    fill:      { fgColor:{ rgb:bg } },
+    alignment: { horizontal:'center', vertical:'center', wrapText:wrap },
+    border:    { bottom:{ style:'thin', color:{ rgb:C.border } } }
+  });
+
+  const styleCell = (fg=C.white, bg=C.rowNorm, bold=false, align='left') => ({
+    font:      { color:{ rgb:fg }, name:'Arial', sz:10, bold },
+    fill:      { fgColor:{ rgb:bg } },
+    alignment: { horizontal:align, vertical:'center' },
+    border:    { bottom:{ style:'hair', color:{ rgb:C.border } } }
+  });
+
+  const wb = XLSX.utils.book_new();
+
+  // ════════════════════════════════════════════════════════
+  // ABA 1 — RESUMO EXECUTIVO
+  // ════════════════════════════════════════════════════════
+  const wsRes = {};
+  let row = 1;
+
+  // Título
+  wsRes[XLSX.utils.encode_cell({r:row-1,c:0})] = {
+    v:`VTO — Relatório de Medição Mensal`, t:'s',
+    s:{ font:{bold:true,color:{rgb:C.white},name:'Arial',sz:16},
+        fill:{fgColor:{rgb:C.bgDark}},
+        alignment:{horizontal:'left',vertical:'center'} }
+  };
+  row++;
+  wsRes[XLSX.utils.encode_cell({r:row-1,c:0})] = {
+    v:`Período: ${mesLabel}   |   Gerado em: ${geradoEm}   |   Sanepar / Acciona`, t:'s',
+    s:{ font:{color:{rgb:C.gray},name:'Arial',sz:10},
+        fill:{fgColor:{rgb:C.bgDark}},
+        alignment:{horizontal:'left'} }
+  };
+  row += 2;
+
+  // KPIs resumo
+  const kpis = [
+    { label:'Total de Visitas', value:totalBrutas, color:C.accent, bg:C.bgMed },
+    { label:'Contam para Medição', value:totalMedicao, color:C.teal, bg:C.tealBg },
+    { label:'Não Contam', value:totalBrutas-totalMedicao, color:C.amber, bg:C.amberBg },
+    { label:'% Medição', value:(totalBrutas>0?(totalMedicao/totalBrutas*100).toFixed(1)+'%':'0%'), color:C.green, bg:C.greenBg },
+  ];
+  kpis.forEach((k,i) => {
+    const col = i*2;
+    wsRes[XLSX.utils.encode_cell({r:row-1,c:col})] = {
+      v:k.label, t:'s',
+      s:{ font:{color:{rgb:C.gray},name:'Arial',sz:9,bold:true},
+          fill:{fgColor:{rgb:k.bg}},
+          alignment:{horizontal:'center'} }
+    };
+    wsRes[XLSX.utils.encode_cell({r:row,c:col})] = {
+      v:k.value, t: typeof k.value==='number'?'n':'s',
+      s:{ font:{bold:true,color:{rgb:k.color},name:'Arial',sz:20},
+          fill:{fgColor:{rgb:k.bg}},
+          alignment:{horizontal:'center',vertical:'center'} }
+    };
+  });
+  row += 3;
+
+  // Tabela por município
+  wsRes[XLSX.utils.encode_cell({r:row-1,c:0})] = {
+    v:'Resultado por Município', t:'s',
+    s:{ font:{bold:true,color:{rgb:C.white},name:'Arial',sz:12},
+        fill:{fgColor:{rgb:C.bgDark}} }
+  };
+  row++;
+
+  const munHeaders = ['Município','Visitas Brutas','Contam Medição','Não Contam','% Medição'];
+  munHeaders.forEach((h,i) => {
+    wsRes[XLSX.utils.encode_cell({r:row-1,c:i})] = { v:h, t:'s', s:styleHeader() };
+  });
+  row++;
+
+  const munArr = Object.entries(munContagem).sort((a,b)=>b[1].medicao-a[1].medicao);
+  munArr.forEach(([mun,cnt], idx) => {
+    const bg = idx%2===0 ? C.rowNorm : C.rowAlt;
+    const pct = cnt.brutas>0 ? (cnt.medicao/cnt.brutas*100).toFixed(1)+'%' : '0%';
+    const rowData = [mun, cnt.brutas, cnt.medicao, cnt.brutas-cnt.medicao, pct];
+    rowData.forEach((v,i) => {
+      const fg = i===0 ? C.white : i===2 ? C.teal : i===4 ? C.green : C.gray;
+      wsRes[XLSX.utils.encode_cell({r:row-1,c:i})] = {
+        v, t: typeof v==='number'?'n':'s', s:styleCell(fg,bg,i===0)
+      };
+    });
+    row++;
+  });
+
+  // Totais
+  const totPct = totalBrutas>0?(totalMedicao/totalBrutas*100).toFixed(1)+'%':'0%';
+  ['TOTAL', totalBrutas, totalMedicao, totalBrutas-totalMedicao, totPct].forEach((v,i) => {
+    wsRes[XLSX.utils.encode_cell({r:row-1,c:i})] = {
+      v, t: typeof v==='number'?'n':'s',
+      s:{ font:{bold:true,color:{rgb:i===0?C.white:i===2?C.teal:i===4?C.green:C.accent},name:'Arial',sz:10},
+          fill:{fgColor:{rgb:C.accentDk}},
+          alignment:{horizontal:i===0?'left':'center',vertical:'center'},
+          border:{top:{style:'thin',color:{rgb:C.accent}}} }
+    };
+  });
+
+  wsRes['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:row,c:7}});
+  wsRes['!cols'] = [{wch:28},{wch:16},{wch:18},{wch:14},{wch:14}];
+  wsRes['!rows'] = [{hpt:32},{hpt:18}];
+  XLSX.utils.book_append_sheet(wb, wsRes, '📊 Resumo');
+
+  // ════════════════════════════════════════════════════════
+  // ABA 2 — VISITAS DETALHADAS
+  // ════════════════════════════════════════════════════════
+  const wsDet = {};
+  let r2 = 1;
+
+  // Título
+  wsDet[XLSX.utils.encode_cell({r:0,c:0})] = {
+    v:`Visitas Detalhadas — ${mesLabel}`, t:'s',
+    s:{ font:{bold:true,color:{rgb:C.white},name:'Arial',sz:14},
+        fill:{fgColor:{rgb:C.bgDark}},
+        alignment:{horizontal:'left',vertical:'center'} }
+  };
+  r2 = 2;
+
+  const detHeaders = [
+    'Município','Matrícula','Protocolo','Serviço',
+    'Nº Visita','Data Visita','Hora','Resultado',
+    '✦ Medição','Status','Abertura','Vencimento',
+    'Baixada','Tipo Baixa','Data Baixa'
+  ];
+  detHeaders.forEach((h,i) => {
+    wsDet[XLSX.utils.encode_cell({r:r2-1,c:i})] = { v:h, t:'s', s:styleHeader(true,C.white,C.headerBg,10,true) };
+  });
+  r2++;
+
+  visitas.sort((a,b)=>{
+    if (a.municipio<b.municipio) return -1;
+    if (a.municipio>b.municipio) return 1;
+    return a.data.localeCompare(b.data);
+  });
+
+  visitas.forEach((v,idx) => {
+    const bg = idx%2===0 ? C.rowNorm : C.rowAlt;
+    const isMed = v.medicao==='SIM';
+    const isOk  = v.status==='Finalizada com Sucesso';
+    const isIrr = v.status.includes('irregular');
+
+    const cells = [
+      { v:v.municipio,  fg:C.white,  bold:true },
+      { v:v.matricula,  fg:C.accent, bold:false },
+      { v:v.protocolo,  fg:C.gray },
+      { v:v.servico,    fg:C.gray },
+      { v:v.visita,     fg:C.white,  align:'center' },
+      { v:v.data,       fg:C.white,  align:'center' },
+      { v:v.hora,       fg:C.gray,   align:'center' },
+      { v:v.resultado,  fg:isOk?C.green:isIrr?C.amber:C.gray },
+      { v:v.medicao,    fg:isMed?C.teal:C.darkGray, bold:isMed, align:'center' },
+      { v:v.status,     fg:isOk?C.green:isIrr?C.amber:C.gray },
+      { v:v.abertura,   fg:C.gray,   align:'center' },
+      { v:v.vencimento, fg:C.gray,   align:'center' },
+      { v:v.baixada,    fg:v.baixada==='SIM'?C.green:C.gray, align:'center' },
+      { v:v.tipo_baixa, fg:C.gray,   align:'center' },
+      { v:v.data_baixa, fg:C.gray,   align:'center' },
+    ];
+
+    cells.forEach((cell,i) => {
+      wsDet[XLSX.utils.encode_cell({r:r2-1,c:i})] = {
+        v: cell.v, t:'s',
+        s: styleCell(cell.fg||C.gray, bg, cell.bold||false, cell.align||'left')
+      };
+    });
+    r2++;
+  });
+
+  wsDet['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:r2,c:14}});
+  wsDet['!cols'] = [
+    {wch:22},{wch:14},{wch:18},{wch:10},
+    {wch:10},{wch:14},{wch:8},{wch:38},
+    {wch:12},{wch:30},{wch:12},{wch:12},
+    {wch:10},{wch:14},{wch:12}
+  ];
+  wsDet['!rows'] = [{hpt:30}];
+  XLSX.utils.book_append_sheet(wb, wsDet, '📋 Visitas Detalhadas');
+
+  // ── Gera e baixa ──────────────────────────────────────────
+  const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array', cellStyles:true });
+  const blob  = new Blob([wbout], { type:'application/octet-stream' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href      = url;
+  a.download  = `VTO_Medicao_${month}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ===================== KPIs & METAS =====================
