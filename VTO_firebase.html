@@ -5,71 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VTO — Sistema de Controle</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Firebase SDKs -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-  // ⚠️ SUBSTITUA pelas suas credenciais do Firebase Console
-  const firebaseConfig = {
-    apiKey: "AIzaSyAcqUFRQ5xuVJsnlCii8aorUbhcptX-MGw",
-    authDomain: "vto---sistema.firebaseapp.com",
-    projectId: "vto---sistema",
-    storageBucket: "vto---sistema.firebasestorage.app",
-    messagingSenderId: "1064817744634",
-    appId: "1:1064817744634:web:a5e668f89926b565150743"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-
-  // Observa estado de autenticação
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('app-root').style.display = 'flex';
-      document.getElementById('user-email-display').textContent = user.email;
-    } else {
-      document.getElementById('login-screen').style.display = 'flex';
-      document.getElementById('app-root').style.display = 'none';
-    }
-  });
-
-  // Login
-  document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    const errEl = document.getElementById('login-error');
-    const btn = document.getElementById('login-btn');
-
-    errEl.style.display = 'none';
-    btn.disabled = true;
-    btn.textContent = 'Entrando...';
-
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      let msg = 'Erro ao fazer login.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        msg = 'E-mail ou senha incorretos.';
-      } else if (err.code === 'auth/too-many-requests') {
-        msg = 'Muitas tentativas. Aguarde e tente novamente.';
-      } else if (err.code === 'auth/invalid-email') {
-        msg = 'E-mail inválido.';
-      }
-      errEl.textContent = '⚠ ' + msg;
-      errEl.style.display = 'flex';
-      btn.disabled = false;
-      btn.textContent = 'Entrar';
-    }
-  });
-
-  // Logout
-  window.doSignOut = async () => {
-    await signOut(auth);
-  };
-</script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -249,6 +184,11 @@ select:focus{border-color:var(--accent);}
 .sort-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0 3px;}
 .sort-btn.asc::after{content:" ↑";}
 .sort-btn.desc::after{content:" ↓";}
+.date-filter-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.date-filter-group label{font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap;}
+.date-input{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:5px 8px;color:var(--text);font-size:12px;font-family:var(--mono);outline:none;}
+.date-input:focus{border-color:var(--accent);}
+.date-filter-select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:5px 8px;color:var(--text);font-size:12px;font-family:var(--mono);outline:none;}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}
 .kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
 .kpi-card-label{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
@@ -273,77 +213,9 @@ select:focus{border-color:var(--accent);}
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
-
-/* LOGIN SCREEN */
-#login-screen{
-  display:flex;position:fixed;inset:0;z-index:9999;
-  background:var(--bg);align-items:center;justify-content:center;
-}
-#app-root{display:none;height:100vh;overflow:hidden;}
-.login-card{
-  background:var(--bg2);border:1px solid var(--border2);
-  border-radius:12px;padding:40px 36px;width:100%;max-width:400px;
-  box-shadow:0 8px 40px rgba(0,0,0,.4);
-}
-.login-logo{text-align:center;margin-bottom:32px;}
-.login-logo h1{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--accent);letter-spacing:.08em;}
-.login-logo p{font-size:12px;color:var(--text3);margin-top:6px;font-family:var(--mono);}
-.login-divider{height:1px;background:var(--border);margin:20px 0;}
-.login-card .form-label{display:block;margin-bottom:6px;}
-.login-card .form-input{margin-bottom:14px;}
-.login-btn-full{width:100%;padding:11px;font-size:14px;justify-content:center;margin-top:4px;}
-.login-error{
-  display:none;align-items:center;gap:8px;
-  background:var(--red-bg);border:1px solid var(--red-border);
-  border-radius:var(--radius);padding:10px 14px;
-  color:#fca5a5;font-size:13px;margin-bottom:14px;
-}
-.login-footer-info{
-  text-align:center;margin-top:22px;font-size:11px;
-  color:var(--text3);font-family:var(--mono);
-}
-.user-bar{
-  display:flex;align-items:center;gap:6px;font-size:11px;
-  color:var(--text3);font-family:var(--mono);
-}
-.logout-btn{
-  background:none;border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text3);padding:3px 10px;font-size:11px;cursor:pointer;
-  font-family:var(--mono);transition:all .15s;
-}
-.logout-btn:hover{border-color:var(--red-border);color:var(--red);}
 </style>
 </head>
 <body>
-
-<!-- TELA DE LOGIN -->
-<div id="login-screen">
-  <div class="login-card">
-    <div class="login-logo">
-      <h1>VTO</h1>
-      <p>Sistema de Controle · Acesso Restrito</p>
-    </div>
-    <div id="login-error" class="login-error">⚠ <span></span></div>
-    <form id="login-form" autocomplete="on">
-      <div class="form-group">
-        <label class="form-label" for="login-email">E-MAIL</label>
-        <input class="form-input" id="login-email" type="email" placeholder="seu@email.com" required autocomplete="email"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="login-password">SENHA</label>
-        <input class="form-input" id="login-password" type="password" placeholder="••••••••" required autocomplete="current-password"/>
-      </div>
-      <button class="btn btn-primary login-btn-full" id="login-btn" type="submit">Entrar</button>
-    </form>
-    <div class="login-footer-info">
-      Acesso autorizado somente para usuários cadastrados.<br>
-      Gerencie usuários no Firebase Console.
-    </div>
-  </div>
-</div>
-
-<!-- APP PRINCIPAL (oculto até autenticar) -->
-<div id="app-root">
 <div class="app">
 <aside class="sidebar">
   <div class="sidebar-logo">
@@ -429,11 +301,6 @@ select:focus{border-color:var(--accent);}
     <p>Hoje: <span class="hl" id="today-date"></span></p>
     <p style="margin-top:3px;" id="total-count"></p>
     <p style="margin-top:3px;color:var(--green);font-size:10px;" id="save-status"></p>
-    <div class="login-divider" style="margin:8px 0;"></div>
-    <div class="user-bar">
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="user-email-display"></span>
-      <button class="logout-btn" onclick="doSignOut()">Sair</button>
-    </div>
   </div>
 </aside>
 
@@ -531,6 +398,26 @@ select:focus{border-color:var(--accent);}
         <button class="status-tab" onclick="setStatusTab(this,'Finalizada sem Sucesso')">✕ Sem Sucesso</button>
         <button class="status-tab" onclick="setStatusTab(this,'vencido')" style="margin-left:auto;border-color:var(--red-border);color:var(--red);">🔴 Vencidos</button>
       </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+        <div class="date-filter-group">
+          <label>Campo:</label>
+          <select id="ases-date-field" class="date-filter-select" onchange="filterTable()">
+            <option value="">— Sem filtro data —</option>
+            <option value="abertura">Abertura</option>
+            <option value="vencimento">Vencimento</option>
+            <option value="v1_data">Data 1ª visita</option>
+            <option value="v2_data">Data 2ª visita</option>
+            <option value="v3_data">Data 3ª visita</option>
+          </select>
+        </div>
+        <div class="date-filter-group">
+          <label>De:</label>
+          <input type="date" id="ases-date-from" class="date-input" onchange="filterTable()">
+          <label>Até:</label>
+          <input type="date" id="ases-date-to" class="date-input" onchange="filterTable()">
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="clearAsesDates()" style="font-size:11px;">✕ Limpar datas</button>
+      </div>
       <div class="filters">
         <div class="search-box">
           <span class="search-icon">🔍</span>
@@ -573,6 +460,15 @@ select:focus{border-color:var(--accent);}
 <div class="view" id="view-pendentes">
   <div class="page-header"><div><h2>Visitas Pendentes</h2><p id="pend-count"></p></div></div>
   <div class="content">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+      <div class="date-filter-group">
+        <label>Vencimento de:</label>
+        <input type="date" id="pend-date-from" class="date-input" onchange="renderPendentes()">
+        <label>até:</label>
+        <input type="date" id="pend-date-to" class="date-input" onchange="renderPendentes()">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pend-date-from').value='';document.getElementById('pend-date-to').value='';renderPendentes();" style="font-size:11px;">✕ Limpar</button>
+    </div>
     <div class="filters" style="margin-bottom:14px;">
       <div class="search-box">
         <span class="search-icon">🔍</span>
@@ -596,6 +492,15 @@ select:focus{border-color:var(--accent);}
 <div class="view" id="view-irregulares">
   <div class="page-header"><div><h2>Irregulares — Aguardam Nova ASE</h2><p>Imóveis com irregularidade confirmada</p></div></div>
   <div class="content">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+      <div class="date-filter-group">
+        <label>Próxima ASE de:</label>
+        <input type="date" id="irreg-date-from" class="date-input" onchange="renderIrregulares()">
+        <label>até:</label>
+        <input type="date" id="irreg-date-to" class="date-input" onchange="renderIrregulares()">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('irreg-date-from').value='';document.getElementById('irreg-date-to').value='';renderIrregulares();" style="font-size:11px;">✕ Limpar</button>
+    </div>
     <div class="filters" style="margin-bottom:14px;">
       <div class="search-box">
         <span class="search-icon">🔍</span>
@@ -751,6 +656,25 @@ select:focus{border-color:var(--accent);}
     </div>
   </div>
   <div class="content">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+      <div class="date-filter-group">
+        <label>Campo:</label>
+        <select id="baixadas-date-field" class="date-filter-select" onchange="renderBaixadas()">
+          <option value="">— Sem filtro data —</option>
+          <option value="baixada_em">Data baixa</option>
+          <option value="vencimento">Vencimento</option>
+          <option value="abertura">Abertura</option>
+          <option value="proxima_ase">Próxima ASE</option>
+        </select>
+      </div>
+      <div class="date-filter-group">
+        <label>De:</label>
+        <input type="date" id="baixadas-date-from" class="date-input" onchange="renderBaixadas()">
+        <label>Até:</label>
+        <input type="date" id="baixadas-date-to" class="date-input" onchange="renderBaixadas()">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('baixadas-date-from').value='';document.getElementById('baixadas-date-to').value='';renderBaixadas();" style="font-size:11px;">✕ Limpar</button>
+    </div>
     <div class="filters" style="margin-bottom:14px;">
       <div class="search-box">
         <span class="search-icon">🔍</span>
@@ -1278,6 +1202,23 @@ function limparBooks() {
   document.getElementById('book-status').innerHTML = '<div class="alert-bar info">Books removidos.</div>';
 }
 
+
+// ── Date filter helpers ──────────────────────────────────────────────────────
+function dateInRange(dateStr, fromStr, toStr) {
+  if (!dateStr) return false;
+  const d = dateStr.slice(0,10);
+  if (fromStr && d < fromStr) return false;
+  if (toStr   && d > toStr)   return false;
+  return true;
+}
+
+function clearAsesDates() {
+  document.getElementById('ases-date-from').value = '';
+  document.getElementById('ases-date-to').value   = '';
+  document.getElementById('ases-date-field').value = '';
+  filterTable();
+}
+
 function clearStorage() {
   if (confirm('Isso vai apagar todos os registros feitos no sistema e voltar ao estado original da planilha. Confirma?')) {
     localStorage.removeItem(STORAGE_KEY);
@@ -1595,7 +1536,21 @@ function renderASETable() {
   const servicoF = document.getElementById('filter-servico')?.value||'';
   const prazoF = document.getElementById('filter-prazo')?.value||'';
 
+  const asesDateField = document.getElementById('ases-date-field')?.value || '';
+  const asesDateFrom  = document.getElementById('ases-date-from')?.value  || '';
+  const asesDateTo    = document.getElementById('ases-date-to')?.value    || '';
+
   filteredRecs = getFiltered().filter(r => {
+    // Date range filter
+    if (asesDateField) {
+      let dateVal = '';
+      if (asesDateField === 'proxima_ase') {
+        dateVal = addDays(r.v3_data||r.v2_data||r.v1_data||r.abertura, 60) || '';
+      } else {
+        dateVal = r[asesDateField] || '';
+      }
+      if (!dateInRange(dateVal, asesDateFrom, asesDateTo)) return false;
+    }
     // Search: matricula, protocolo, dates
     if (search) {
       const haystack = [r.matricula,r.protocolo,r.abertura,r.vencimento,r.v1_data,r.v2_data,r.v3_data,r.municipio]
@@ -1662,7 +1617,17 @@ function setFilter(field, val) { const el=document.getElementById(`filter-${fiel
 function renderPendentes() {
   const search = (document.getElementById('search-pendentes')?.value||'').toLowerCase();
   const servicoF = document.getElementById('filter-pend-servico')?.value||'';
-  let pend = getFiltered().filter(r => !r.baixada && (calcStatus(r)==='Vistoria Pendente'||calcStatus(r)==='Reagendamento cód 79'));
+  const pendDateFrom = document.getElementById('pend-date-from')?.value || '';
+  const pendDateTo   = document.getElementById('pend-date-to')?.value   || '';
+  let pend = getFiltered().filter(r => {
+    if (r.baixada) return false;
+    const st = calcStatus(r);
+    if (st!=='Vistoria Pendente' && st!=='Reagendamento cód 79') return false;
+    if (pendDateFrom || pendDateTo) {
+      if (!dateInRange(r.vencimento||'', pendDateFrom, pendDateTo)) return false;
+    }
+    return true;
+  });
   if (search) pend = pend.filter(r => [r.matricula,r.protocolo,r.municipio,r.servico].filter(Boolean).join(' ').toLowerCase().includes(search));
   if (servicoF) pend = pend.filter(r => r.servico === servicoF);
   pend.sort((a,b) => daysFrom(a.vencimento)-daysFrom(b.vencimento));
@@ -1688,7 +1653,17 @@ function toggleIrregSort() {
 function renderIrregulares() {
   const search = (document.getElementById('search-irreg')?.value||'').toLowerCase();
   const prazoF = document.getElementById('filter-irreg-prazo')?.value||'';
-  let irreg = getFiltered().filter(r => !r.baixada && calcStatus(r)==='Finalizada irregular, Reagendamento');
+  const irregDateFrom = document.getElementById('irreg-date-from')?.value || '';
+  const irregDateTo   = document.getElementById('irreg-date-to')?.value   || '';
+  let irreg = getFiltered().filter(r => {
+    if (r.baixada) return false;
+    if (calcStatus(r)!=='Finalizada irregular, Reagendamento') return false;
+    if (irregDateFrom || irregDateTo) {
+      const nextDate = addDays(r.v3_data||r.v2_data||r.v1_data||r.abertura, 60) || '';
+      if (!dateInRange(nextDate, irregDateFrom, irregDateTo)) return false;
+    }
+    return true;
+  });
   if (search) irreg = irreg.filter(r => [r.matricula,r.protocolo,r.municipio,r.resultado_final,r.v1_resultado,r.v2_resultado].filter(Boolean).join(' ').toLowerCase().includes(search));
   if (prazoF) {
     irreg = irreg.filter(r => {
@@ -2265,7 +2240,23 @@ function renderBaixadas() {
   const tipoF = document.getElementById('filter-baixadas-tipo')?.value||'';
   const munF  = document.getElementById('filter-baixadas-mun')?.value||'';
 
-  let baixadas = RECORDS.filter(r => r.baixada);
+  const baixadasDateField = document.getElementById('baixadas-date-field')?.value || '';
+  const baixadasDateFrom  = document.getElementById('baixadas-date-from')?.value  || '';
+  const baixadasDateTo    = document.getElementById('baixadas-date-to')?.value    || '';
+  let baixadas = RECORDS.filter(r => {
+    if (!r.baixada) return false;
+    if (baixadasDateField && (baixadasDateFrom || baixadasDateTo)) {
+      let dateVal = '';
+      if (baixadasDateField === 'proxima_ase') {
+        const lastDate = r.v3_data||r.v2_data||r.v1_data||r.baixada_em||'';
+        dateVal = addDays(lastDate, 60) || '';
+      } else {
+        dateVal = r[baixadasDateField] || '';
+      }
+      if (!dateInRange(dateVal, baixadasDateFrom, baixadasDateTo)) return false;
+    }
+    return true;
+  });
   if (search) baixadas = baixadas.filter(r => [r.matricula,r.protocolo,r.municipio,r.servico].filter(Boolean).join(' ').toLowerCase().includes(search));
   if (tipoF)  baixadas = baixadas.filter(r => r.baixada_tipo === tipoF);
   if (munF)   baixadas = baixadas.filter(r => r.municipio === munF);
@@ -2934,7 +2925,5 @@ renderASETable();
     </div>
   </div>
 </div>
-</div><!-- /.app -->
-</div><!-- /#app-root -->
 </body>
 </html>
