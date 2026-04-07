@@ -1581,7 +1581,7 @@ function renderASETable() {
 
   document.getElementById('tb-ases').innerHTML = pageRecs.map(r => {
     const days = daysFrom(r.vencimento);
-    return `<tr onclick="openModal('${r.matricula}+${r.municipio}')" style="cursor:pointer;${r.baixada?'opacity:0.7;':''}">
+    return `<tr onclick="openModal('${r.matricula}+${r.municipio}+${r.protocolo||""}')" style="cursor:pointer;${r.baixada?'opacity:0.7;':''}">
       <td style="font-size:11px;color:var(--text2);">${r.municipio||'—'}</td><td class="mono" style="color:var(--text);font-weight:500;">${r.book?"📘 ":""}${r.matricula}</td>
       <td><span class="badge badge-gray">${r.servico||'—'}</span></td>
       <td class="mono">${fmtDate(r.abertura)}</td>
@@ -1604,7 +1604,7 @@ function renderASETable() {
         : daysChip(days)}</td>
       <td>${getStatusBadge(calcStatus(r))}</td>
       <td style="font-size:11px;color:var(--text3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.resultado_final||'—'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openModal('${r.matricula}')">Ver</button></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openModal('${r.matricula}+${r.municipio||""}+${r.protocolo||""}')">Ver</button></td>
     </tr>`;
   }).join('');
 
@@ -1645,13 +1645,13 @@ function renderPendentes() {
   pend.sort((a,b) => daysFrom(a.vencimento)-daysFrom(b.vencimento));
   document.getElementById('pend-count').textContent = `${pend.length} ASE(s) aguardando visita`;
   document.getElementById('tb-pendentes').innerHTML = pend.map(r => `
-    <tr onclick="openModal('${r.matricula}+${r.municipio}')" style="cursor:pointer;">
+    <tr onclick="openModal('${r.matricula}+${r.municipio}+${r.protocolo||""}')" style="cursor:pointer;">
       <td style="font-size:11px;color:var(--text2);">${r.municipio||'—'}</td><td class="mono" style="color:var(--text);font-weight:500;">${r.matricula}</td>
       <td class="mono" style="font-size:11px;color:var(--text3);">${r.protocolo||'—'}</td>
       <td><span class="badge badge-gray">${r.servico||'—'}</span></td>
       <td class="mono">${fmtDate(r.vencimento)}</td>
       <td>${daysChip(daysFrom(r.vencimento), calcStatus(r))}</td>
-      <td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openRegistrar('${r.matricula}')">Registrar</button></td>
+      <td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openRegistrar('${r.matricula}','${r.protocolo||''}')">Registrar</button></td>
     </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text3);">Sem pendentes ✓</td></tr>';
 }
 
@@ -1699,13 +1699,13 @@ function renderIrregulares() {
       <thead><tr><th>Matrícula</th><th>Irregularidade</th><th>1ª Vistoria</th><th>Próxima ASE</th><th>Dias p/ próx.</th><th></th></tr></thead>
       <tbody>${irreg.map(r => {
         const nd = addDays(r.v3_data||r.v2_data||r.v1_data||r.abertura, 60);
-        return `<tr onclick="openModal('${r.matricula}+${r.municipio}')" style="cursor:pointer;${r.baixada?'opacity:0.7;':''}">
+        return `<tr onclick="openModal('${r.matricula}+${r.municipio}+${r.protocolo||""}')" style="cursor:pointer;${r.baixada?'opacity:0.7;':''}">
           <td class="mono" style="color:var(--text);font-weight:500;">${r.matricula}</td>
           <td style="font-size:11px;color:var(--amber);">${(r.resultado_final||r.v1_resultado||'').substring(0,38)}</td>
           <td class="mono">${fmtDate(r.v1_data)}</td>
           <td class="mono">${fmtDate(nd)}</td>
           <td>${daysChip(daysFrom(nd), calcStatus(r))}</td>
-          <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openModal('${r.matricula}')">Ver</button></td>
+          <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openModal('${r.matricula}+${r.municipio||""}+${r.protocolo||""}')">Ver</button></td>
         </tr>`;
       }).join('')}</tbody>
     </table></div></div>`;
@@ -1796,7 +1796,7 @@ function renderSanepar() {
             <span style="font-family:var(--mono);font-size:12px;">${fmtDate(lastDate)}</span></div>
         </div>
         <div style="margin-top:8px;text-align:right;">
-          <button class="btn btn-ghost btn-sm" onclick="openModal('${r.matricula}+${r.municipio}')">Ver detalhes</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('${r.matricula}+${r.municipio}+${r.protocolo||""}')">Ver detalhes</button>
         </div>
       </div>`;
     }).join('');
@@ -1832,9 +1832,18 @@ function renderSanepar() {
 // ===================== MODAL =====================
 let currentModalMatricula = null;
 function openModal(key) {
-  const [matricula, municipio] = key.includes('+') ? key.split('+') : [key, null];
+  const parts = key.includes('+') ? key.split('+') : [key, null, null];
+  const matricula = parts[0];
+  const municipio = parts[1] || null;
+  const protocolo = parts[2] || null;
   currentModalMatricula = key;
-  const r = RECORDS.find(x => x.matricula===matricula && (!municipio || x.municipio===municipio));
+  let r;
+  if (protocolo) {
+    r = RECORDS.find(x => x.protocolo === protocolo && x.matricula === matricula);
+  }
+  if (!r) {
+    r = RECORDS.find(x => x.matricula===matricula && (!municipio || x.municipio===municipio));
+  }
   if (!r) return;
   document.getElementById('modal-title').textContent = `ASE — Matrícula ${r.matricula}`;
   const san = needsSanepar(r);
@@ -2001,7 +2010,7 @@ function baixarASE(matricula, municipio, tipo) {
 
 function closeModal(e) { if(e.target===document.getElementById('modal-overlay')) closeModalDirect(); }
 function closeModalDirect() { document.getElementById('modal-overlay').classList.remove('open'); }
-function openRegistrarFromModal() { closeModalDirect(); const [mat] = currentModalMatricula.split('+'); openRegistrar(mat); }
+function openRegistrarFromModal() { closeModalDirect(); const parts = currentModalMatricula.split('+'); const mat = parts[0]; const prot = parts[2]||''; openRegistrar(mat, prot); }
 
 // ===================== FORM =====================
 let selectedASE = null, formStep = 1;
@@ -2021,31 +2030,53 @@ function showView(id) {
   if (id==='baixalote') initLote();
 }
 
-function openRegistrar(matricula) {
+function openRegistrar(matricula, protocolo) {
   showView('registrar'); resetForm();
-  if (matricula) { document.getElementById('f-search').value=matricula; searchASE(matricula); }
+  if (protocolo) {
+    document.getElementById('f-search').value = protocolo;
+    searchASE(protocolo);
+    const r = RECORDS.find(x => x.protocolo === protocolo);
+    if (r) { setTimeout(() => selectASE(protocolo), 80); }
+  } else if (matricula) {
+    document.getElementById('f-search').value=matricula;
+    searchASE(matricula);
+  }
 }
 
 function searchASE(q) {
   const res = document.getElementById('f-search-results');
   if (!q||q.length<3) { res.innerHTML=''; return; }
-  const found = RECORDS.filter(r => r.matricula?.includes(q)||r.protocolo?.includes(q)).slice(0,5);
+  const found = RECORDS.filter(r => r.matricula?.includes(q)||r.protocolo?.includes(q)).slice(0,10);
   if (!found.length) { res.innerHTML='<p style="color:var(--text3);font-size:13px;">Nenhuma ASE encontrada.</p>'; return; }
-  res.innerHTML = found.map(r => `
-    <div onclick="selectASE('${r.matricula}')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:11px;margin-bottom:7px;cursor:pointer;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+  res.innerHTML = found.map(r => {
+    // Chave única: protocolo se existir, senão matricula+servico+vencimento
+    const key = r.protocolo || (r.matricula + '|' + (r.servico||'') + '|' + (r.vencimento||''));
+    const st = calcStatus(r);
+    const isBaixada = r.baixada;
+    return `
+    <div onclick="selectASE('${key}')" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:11px;margin-bottom:7px;cursor:pointer;${isBaixada?'opacity:0.6;':''}" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
       <div style="display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-family:var(--mono);font-weight:500;color:var(--text);">${r.matricula}</span>${getStatusBadge(calcStatus(r))}
+        <span style="font-family:var(--mono);font-weight:500;color:var(--text);">${r.matricula}</span>${getStatusBadge(st)}
       </div>
-      <div style="margin-top:5px;display:flex;gap:14px;">
-        <span style="font-size:11px;color:var(--text3);">Serviço: ${r.servico}</span>
+      <div style="margin-top:5px;display:flex;gap:14px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--text3);">Serviço: ${r.servico||'—'}</span>
         <span style="font-size:11px;color:var(--text3);">Vence: ${fmtDate(r.vencimento)}</span>
         <span style="font-size:11px;color:var(--text3);">Município: ${r.municipio||'—'}</span>
+        ${r.protocolo ? `<span style="font-size:11px;color:var(--text3);font-family:var(--mono);">Prot: ${r.protocolo}</span>` : ''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
-function selectASE(matricula) {
-  selectedASE = RECORDS.find(r => r.matricula===matricula);
+function selectASE(key) {
+  // key pode ser: protocolo, ou matricula|servico|vencimento
+  if (key.includes('|')) {
+    const [mat, serv, venc] = key.split('|');
+    selectedASE = RECORDS.find(r => r.matricula===mat && (r.servico||'')===(serv||'') && (r.vencimento||'')===(venc||''));
+  } else {
+    // é um protocolo
+    selectedASE = RECORDS.find(r => r.protocolo===key) || RECORDS.find(r => r.matricula===key);
+  }
   if (!selectedASE) return;
   const r = selectedASE;
 
