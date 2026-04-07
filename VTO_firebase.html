@@ -428,7 +428,7 @@ select:focus{border-color:var(--accent);}
           <option value="8403">8403 — 1ª Vistoria</option>
           <option value="8405">8405 — 2ª Vistoria</option>
           <option value="8428">8428 — 3ª Vistoria</option>
-          <option value="8400">8400 — Verificação</option>
+          <option value="8400">8400 — Pedido do cliente</option>
         </select>
         <select id="filter-prazo" onchange="filterTable()">
           <option value="">Qualquer prazo</option>
@@ -479,6 +479,8 @@ select:focus{border-color:var(--accent);}
         <option value="8403">8403 — 1ª Vistoria</option>
         <option value="8405">8405 — 2ª Vistoria</option>
         <option value="8428">8428 — 3ª Vistoria</option>
+        <option value="8400">8400 — Pedido do cliente</option>
+        <option value="8407">8407 — Topografia</option>
       </select>
     </div>
     <div class="panel"><div class="table-wrap"><table>
@@ -722,7 +724,7 @@ select:focus{border-color:var(--accent);}
               <option value="8403">8403 — 1ª Vistoria</option>
               <option value="8405">8405 — 2ª Vistoria</option>
               <option value="8428">8428 — 3ª Vistoria</option>
-              <option value="8400">8400 — Verificação</option>
+              <option value="8400">8400 — Pedido do cliente</option>
               <option value="8407">8407 — Topografia</option>
             </select>
           </div>
@@ -1586,7 +1588,17 @@ function renderASETable() {
       <td class="mono">${r.baixada ? '' : fmtDate(r.vencimento)}</td>
       <td>${r.baixada
         ? (r.baixada_tipo === 'reagendada'
-            ? (() => { const nd = addDays(r.v3_data||r.v2_data||r.v1_data||r.baixada_em, 60); const dd = daysFrom(nd); return '<span class="days-chip ' + (dd < 0 ? 'crit' : dd <= 7 ? 'crit' : dd <= 15 ? 'warn' : 'ok') + '" title="Reagendar em ' + fmtDate(nd) + '">⏱ ' + (dd < 0 ? 'Reagendar vencido' : 'Reagendar ' + dd + 'd') + '</span>'; })()
+            ? (() => {
+                // Verifica se já existe nova ASE aberta para esta matrícula
+                const temNovaASE = RECORDS.some(x => x !== r && x.matricula === r.matricula && !x.baixada);
+                if (temNovaASE) {
+                  return '<span class="days-chip ok" style="background:var(--green-bg);color:var(--green);border-color:var(--green-border);">✓ Baixada</span>';
+                }
+                const nd = addDays(r.v3_data||r.v2_data||r.v1_data||r.baixada_em, 60);
+                const dd = daysFrom(nd);
+                // ASE já baixada: mostrar info da próxima ASE esperada, sem alerta crítico
+                return '<span class="days-chip neutral" title="Aguarda nova ASE — previsão ' + fmtDate(nd) + '">⏱ Nova ASE ' + (dd < 0 ? 'prev.' : 'prev. ' + dd + 'd') + '</span>';
+              })()
             : '<span class="days-chip ok" style="background:var(--green-bg);color:var(--green);border-color:var(--green-border);">✓ Baixada</span>'
           )
         : daysChip(days)}</td>
