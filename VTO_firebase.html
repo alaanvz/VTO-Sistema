@@ -429,6 +429,8 @@ select:focus{border-color:var(--accent);}
           <option value="8405">8405 — 2ª Vistoria</option>
           <option value="8428">8428 — 3ª Vistoria</option>
           <option value="8400">8400 — Pedido do cliente</option>
+          <option value="8480">8480 — Habite-se</option>
+          <option value="8419">8419 — END</option>
         </select>
         <select id="filter-prazo" onchange="filterTable()">
           <option value="">Qualquer prazo</option>
@@ -481,6 +483,8 @@ select:focus{border-color:var(--accent);}
         <option value="8428">8428 — 3ª Vistoria</option>
         <option value="8400">8400 — Pedido do cliente</option>
         <option value="8407">8407 — Topografia</option>
+        <option value="8480">8480 — Habite-se</option>
+        <option value="8419">8419 — END</option>
       </select>
     </div>
     <div class="panel"><div class="table-wrap"><table>
@@ -726,6 +730,8 @@ select:focus{border-color:var(--accent);}
               <option value="8428">8428 — 3ª Vistoria</option>
               <option value="8400">8400 — Pedido do cliente</option>
               <option value="8407">8407 — Topografia</option>
+              <option value="8480">8480 — Habite-se</option>
+              <option value="8419">8419 — END</option>
             </select>
           </div>
           <div class="form-group">
@@ -852,9 +858,12 @@ select:focus{border-color:var(--accent);}
       <button class="close-btn" onclick="closeModalDirect()">✕</button>
     </div>
     <div class="modal-body" id="modal-body"></div>
-    <div class="modal-footer" id="modal-footer-btns" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);">
-      <button class="btn btn-ghost" onclick="closeModalDirect()">Fechar</button>
-      <button class="btn btn-primary" onclick="openRegistrarFromModal()">Registrar Visita</button>
+    <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--border);">
+      <div id="modal-footer-delete"></div>
+      <div id="modal-footer-btns" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" onclick="closeModalDirect()">Fechar</button>
+        <button class="btn btn-primary" onclick="openRegistrarFromModal()">Registrar Visita</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1346,12 +1355,15 @@ function renderDashboard() {
   // Seletor de mês
   const dms = document.getElementById('dash-month-select');
   if (dms && dms.options.length <= 1) {
-    getAllMonths().reverse().forEach(mo => {
+    const allMonths = getAllMonths();
+    // Garante que o mês atual sempre aparece na lista
+    if (!allMonths.includes(curMonth)) allMonths.unshift(curMonth);
+    allMonths.forEach(mo => {
       const o = document.createElement('option');
       o.value = mo; o.textContent = fmtMonth(mo);
-      if (mo === curMonth) o.selected = true;
       dms.appendChild(o);
     });
+    dms.value = curMonth; // força seleção do mês atual
   }
   const dashMonth = getDashMonth();
 
@@ -1448,10 +1460,11 @@ function renderDashboard() {
 function populateMonthSelector() {
   const sel = document.getElementById('mes-select');
   const months = getAllMonths();
-  sel.innerHTML = months.map(m => `<option value="${m}">${fmtMonth(m)}</option>`).join('');
-  // default to current month if available
   const curMonth = TODAY.toISOString().slice(0,7);
-  if (months.includes(curMonth)) sel.value = curMonth;
+  // Garante que o mês atual sempre aparece na lista
+  if (!months.includes(curMonth)) months.unshift(curMonth);
+  sel.innerHTML = months.map(m => `<option value="${m}">${fmtMonth(m)}</option>`).join('');
+  sel.value = curMonth;
 }
 
 function renderMedicao() {
@@ -1923,6 +1936,11 @@ function openModal(key) {
     }
   }
   document.getElementById('modal-footer-btns').innerHTML = footerBtns;
+  // Botão de exclusão sempre presente
+  const delKey = encodeURIComponent(r.matricula + '+' + (municipio||r.municipio||''));
+  const delDiv = document.getElementById('modal-footer-delete');
+  if (delDiv) delDiv.innerHTML = `<button class="btn btn-sm" onclick="deleteASE(decodeURIComponent('${delKey}'))"
+    style="background:var(--red-bg);color:var(--red);border-color:var(--red-border);">🗑 Excluir ASE</button>`;
   document.getElementById('modal-overlay').classList.add('open');
 }
 
@@ -2459,9 +2477,11 @@ function populateKPIMonthSelector() {
   const sel = document.getElementById('kpi-mes-select');
   if (!sel) return;
   const months = getAllMonths();
-  sel.innerHTML = months.map(m => `<option value="${m}">${fmtMonth(m)}</option>`).join('');
   const cur = TODAY.toISOString().slice(0,7);
-  if (months.includes(cur)) sel.value = cur;
+  // Garante que o mês atual sempre aparece na lista
+  if (!months.includes(cur)) months.unshift(cur);
+  sel.innerHTML = months.map(m => `<option value="${m}">${fmtMonth(m)}</option>`).join('');
+  sel.value = cur;
 }
 
 function getKPIData(month) {
@@ -2941,7 +2961,24 @@ function goToASEs(statusFilter) {
 }
 
 
-// ===================== INIT =====================
+function deleteASE(key) {
+  const parts = key.split('+');
+  const matricula = parts[0];
+  const municipio = parts[1] || '';
+  const r = RECORDS.find(x => x.matricula === matricula && (!municipio || x.municipio === municipio));
+  const label = r ? `Mat. ${r.matricula} / Serv. ${r.servico||'?'} / ${r.municipio||''}` : key;
+  if (!confirm(`⚠ Tem certeza que deseja EXCLUIR permanentemente esta ASE?\n\n${label}\n\nEsta ação não pode ser desfeita.`)) return;
+  const idx = RECORDS.findIndex(x => x.matricula === matricula && (!municipio || x.municipio === municipio));
+  if (idx !== -1) {
+    RECORDS.splice(idx, 1);
+    saveRecords();
+    closeModalDirect();
+    renderAll();
+    renderASETable();
+  }
+}
+
+
 document.getElementById('today-date').textContent = TODAY.toLocaleDateString('pt-BR');
 loadRecords();
 populateMonthSelector();
