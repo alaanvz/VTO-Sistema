@@ -5,6 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VTO — Sistema de Controle</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDEBhIKLmCegMzWlG6Uthxd6e5pPzFKmsQ",
+    authDomain: "vto---sistema.firebaseapp.com",
+    projectId: "vto---sistema",
+    storageBucket: "vto---sistema.firebasestorage.app",
+    messagingSenderId: "1064817744634",
+    appId: "1:1064817744634:web:a5e668f89926b565150743"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const auth = firebase.auth();
+  const FIRESTORE_DOC = 'dados/vto_ubirata';
+</script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -845,7 +863,7 @@ select:focus{border-color:var(--accent);}
       <div id="book-status" style="margin-bottom:16px;"></div>
       <p style="font-size:12px;color:var(--text3);margin-bottom:10px;font-family:var(--mono);">BACKUP DOS SEUS DADOS</p>
       <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">
-        Seus dados ficam no navegador. <b style="color:var(--amber);">Exporte o backup antes de trocar o arquivo HTML!</b>
+        Seus dados ficam na <b style="color:var(--green);">nuvem (Firestore)</b> e sincronizam entre todos os usuários em tempo real. Exporte o backup como precaução.
       </p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
         <button class="btn btn-primary btn-sm" onclick="exportarBackup()">⬇ Exportar backup</button>
@@ -1002,44 +1020,59 @@ const INITIAL_DATA = [{"servico": "8403", "abertura": "2026-02-26", "vencimento"
 let RECORDS = [];
 
 const DATA_VERSION = 'v7_tema_25mar';
+let _firestoreUnsubscribe = null;
+let _saveTimeout = null;
+
 function loadRecords() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const savedVer = localStorage.getItem(STORAGE_KEY+'_ver');
-    if (saved && savedVer === DATA_VERSION) {
-      RECORDS = JSON.parse(saved);
-      document.getElementById('save-status').textContent = '✓ dados salvos';
-    } else {
-      // Merge user-entered data from old save into clean deduplicated base
-      const base = JSON.parse(JSON.stringify(INITIAL_DATA));
-      if (saved) {
-        const old = JSON.parse(saved);
-        const userFields = ['baixada','baixada_tipo','baixada_em','sanepar_notificado',
-          'sanepar_multa','obs','v1_data','v1_hora','v1_resultado','v2_data','v2_hora',
-          'v2_resultado','v3_data','v3_hora','v3_resultado','resultado_final','abertura','vencimento','equipe'];
-        old.forEach(o => {
-          // Match by protocolo first, then matricula
-          const found = base.find(r => r.protocolo && r.protocolo === o.protocolo)
-                     || base.find(r => r.matricula === o.matricula && !o.protocolo);
-          if (found) userFields.forEach(f => { if (o[f] != null) found[f] = o[f]; });
-        });
+  const statusEl = document.getElementById('save-status');
+  if (statusEl) statusEl.textContent = '⏳ conectando...';
+
+  // Listen for real-time updates from Firestore
+  if (_firestoreUnsubscribe) _firestoreUnsubscribe();
+
+  _firestoreUnsubscribe = db.doc(FIRESTORE_DOC).onSnapshot(function(doc) {
+    if (doc.exists) {
+      const data = doc.data();
+      if (data && Array.isArray(data.records)) {
+        RECORDS = data.records;
+        if (statusEl) statusEl.textContent = '✓ sincronizado ' + new Date().toLocaleTimeString('pt-BR');
+        renderAll();
+        renderASETable();
+        return;
       }
-      RECORDS = base;
-      localStorage.setItem(STORAGE_KEY+'_ver', DATA_VERSION);
-      saveRecords();
     }
-  } catch(e) {
+    // Document doesn't exist yet — seed with INITIAL_DATA
     RECORDS = JSON.parse(JSON.stringify(INITIAL_DATA));
-  }
+    if (statusEl) statusEl.textContent = '⏳ carregando dados iniciais...';
+    _writeToFirestore();
+  }, function(err) {
+    // Fallback to INITIAL_DATA on error
+    console.warn('Firestore error:', err);
+    RECORDS = JSON.parse(JSON.stringify(INITIAL_DATA));
+    if (statusEl) statusEl.textContent = '⚠ offline — dados locais';
+    renderAll();
+    renderASETable();
+  });
+}
+
+function _writeToFirestore() {
+  const statusEl = document.getElementById('save-status');
+  return db.doc(FIRESTORE_DOC).set({ records: RECORDS, updatedAt: new Date().toISOString() })
+    .then(function() {
+      if (statusEl) statusEl.textContent = '✓ salvo ' + new Date().toLocaleTimeString('pt-BR');
+    })
+    .catch(function(e) {
+      if (statusEl) statusEl.textContent = '⚠ erro ao salvar';
+      console.error('Firestore save error:', e);
+    });
 }
 
 function saveRecords() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(RECORDS));
-    document.getElementById('save-status').textContent = '✓ salvo ' + new Date().toLocaleTimeString('pt-BR');
-  } catch(e) {
-    document.getElementById('save-status').textContent = '⚠ erro ao salvar';
-  }
+  // Debounce: wait 800ms after last call before writing to Firestore
+  const statusEl = document.getElementById('save-status');
+  if (statusEl) statusEl.textContent = '💾 salvando...';
+  clearTimeout(_saveTimeout);
+  _saveTimeout = setTimeout(_writeToFirestore, 800);
 }
 
 
@@ -1224,12 +1257,11 @@ function confirmarLote() {
 // ===================== BACKUP =====================
 function exportarBackup() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || JSON.stringify(RECORDS);
     const backup = {
       version: typeof DATA_VERSION!=='undefined' ? DATA_VERSION : 'v1',
       exportedAt: new Date().toISOString(),
       totalRecords: RECORDS.length,
-      records: JSON.parse(saved)
+      records: RECORDS
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
     const a = document.createElement('a');
@@ -1265,9 +1297,11 @@ function restaurarBackup(input) {
         else if (old.matricula) { base.push(old); restored++; }
       });
       RECORDS = base;
-      saveRecords();
       renderAll();
-      el.innerHTML = `<div class="alert-bar success">✓ ${restored} registros restaurados!</div>`;
+      el.innerHTML = `<div class="alert-bar info">⏳ Salvando ${restored} registros no Firestore...</div>`;
+      _writeToFirestore().then(function() {
+        el.innerHTML = `<div class="alert-bar success">✓ ${restored} registros restaurados e sincronizados!</div>`;
+      });
     } catch(err) { el.innerHTML = `<div class="alert-bar danger">❌ Erro: ${err.message}</div>`; }
   };
   reader.readAsText(file);
@@ -1341,8 +1375,8 @@ function clearAsesDates() {
 
 function clearStorage() {
   if (confirm('Isso vai apagar todos os registros feitos no sistema e voltar ao estado original da planilha. Confirma?')) {
-    localStorage.removeItem(STORAGE_KEY);
-    location.reload();
+    RECORDS = JSON.parse(JSON.stringify(INITIAL_DATA));
+    _writeToFirestore().then(function() { location.reload(); });
   }
 }
 
@@ -3221,10 +3255,8 @@ function deleteASE(key) {
 
 
 document.getElementById('today-date').textContent = TODAY.toLocaleDateString('pt-BR');
-loadRecords();
 populateMonthSelector();
-renderAll();
-renderASETable();
+loadRecords(); // renderAll and renderASETable called inside onSnapshot callback
 </script>
 <div id="list-modal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:92%;max-width:920px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
