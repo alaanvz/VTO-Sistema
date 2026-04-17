@@ -575,6 +575,12 @@ select:focus{border-color:var(--accent);}
             <label class="form-label">Vistoriador</label>
             <input type="text" class="form-input" id="f-vistoriador" placeholder="Nome do vistoriador">
           </div>
+          <div class="form-group" id="f-equipe-group">
+            <label class="form-label">Equipe</label>
+            <select class="form-select" id="f-equipe">
+              <option value="">— Selecione a equipe —</option>
+            </select>
+          </div>
         </div>
         <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
           <button class="btn btn-ghost" onclick="resetForm()">Cancelar</button>
@@ -700,7 +706,7 @@ select:focus{border-color:var(--accent);}
         <thead><tr>
           <th>Município</th><th>Matrícula</th><th>Protocolo</th><th>Serviço</th>
           <th>Abertura</th><th>Vencimento</th><th>Resultado</th>
-          <th>Tipo Baixa</th><th>Data Baixa</th><th>Próxima ASE</th><th></th>
+          <th>Tipo Baixa</th><th>Data Baixa</th><th>Próxima ASE</th><th>Equipe</th><th></th>
         </tr></thead>
         <tbody id="tb-baixadas"></tbody>
       </table></div>
@@ -720,7 +726,7 @@ select:focus{border-color:var(--accent);}
         <div class="form-grid" style="margin-bottom:14px;">
           <div class="form-group">
             <label class="form-label">Município</label>
-            <select class="form-select" id="nova-municipio"></select>
+            <select class="form-select" id="nova-municipio" onchange="updateNovaASEEquipes()"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Serviço</label>
@@ -753,6 +759,12 @@ select:focus{border-color:var(--accent);}
           <div class="form-group">
             <label class="form-label">Hidrômetro</label>
             <input type="text" class="form-input" id="nova-hidrometro" placeholder="Opcional">
+          </div>
+          <div class="form-group full" id="nova-equipe-group">
+            <label class="form-label">Equipe <span style="color:var(--text3);font-size:10px;text-transform:none;font-weight:400;">(selecione o município primeiro)</span></label>
+            <select class="form-select" id="nova-equipe">
+              <option value="">-- Selecione o município primeiro --</option>
+            </select>
           </div>
         </div>
         <div id="nova-ase-msg" style="margin-bottom:10px;"></div>
@@ -809,18 +821,18 @@ select:focus{border-color:var(--accent);}
 
 <!-- IMPORTAR -->
 <div class="view" id="view-importar">
-  <div class="page-header"><div><h2>Importar Planilha</h2><p>Carregue um novo arquivo .xlsx para atualizar os dados</p></div></div>
+  <div class="page-header"><div><h2>Importar Planilha</h2><p>Carregue um novo arquivo .xlsx ou .csv para atualizar os dados</p></div></div>
   <div class="content"><div style="max-width:600px;">
     <div class="alert-bar info" style="margin-bottom:16px;">
-      ℹ Arraste qualquer planilha .xlsx com as colunas: Serviço, Abertura, Vencimento, Matrícula, Protocolo e Município. O nome do arquivo e da aba não importam. Novos registros são adicionados; existentes (mesmo protocolo ou matrícula+serviço) são atualizados.
+      ℹ Arraste qualquer planilha <b>.xlsx</b> ou <b>.csv</b> com as colunas: Serviço, Abertura, Vencimento, Matrícula, Protocolo e Município. O nome do arquivo e da aba não importam. Novos registros são adicionados; existentes (mesmo protocolo ou matrícula+serviço) são atualizados.
     </div>
     <div class="import-zone" id="import-zone" onclick="document.getElementById('file-input').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
       <div class="file-icon">📂</div>
-      <h3>Arraste o arquivo .xlsx aqui</h3>
+      <h3>Arraste o arquivo aqui</h3>
       <p>ou clique para selecionar</p>
-      <p style="margin-top:8px;font-size:11px;color:var(--text3);">Formatos aceitos: .xlsx, .xls</p>
+      <p style="margin-top:8px;font-size:11px;color:var(--text3);">Formatos aceitos: .xlsx, .xls, .csv</p>
     </div>
-    <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileInput(this)">
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv,text/csv" style="display:none" onchange="handleFileInput(this)">
     <div id="import-status" style="margin-top:14px;"></div>
     <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
       <p style="font-size:12px;color:var(--text3);margin-bottom:10px;font-family:var(--mono);">📘 BOOKS DE VISTORIA</p>
@@ -887,6 +899,78 @@ const MEDICAO_LABELS = {
   '80':'Usuário não quis responder'
 };
 const MUNICIPIOS = ["Altamira do Paraná", "Alto Paraná", "Altônia", "Amaporã", "Barbosa Ferraz", "Boa Esperança", "Bom Sucesso", "Brasilândia do Sul", "Campina da Lagoa", "Diamante do Norte", "Engenheiro Beltrão", "Esperança Nova", "Farol", "Fênix", "Floresta", "Goioerê", "Guairaçá", "Guaporema", "Icaraíma", "Inajá", "Indianópolis", "Iporã", "Iretama", "Itaúna do Sul", "Ivatuba", "Jandaia do Sul", "Janiópolis", "Juranda", "Mandaguaçu", "Maria Helena", "Marilena", "Mato Rico", "Mirador", "Nova Aliança do Ivaí", "Nova Cantu", "Ourizona", "Paranacity", "Planaltina do Paraná", "Quarto Centenário", "Rancho Alegre", "Roncador", "Santa Fé", "Santo Antonio do Caiuá", "São Pedro do Paraná", "São Tomé", "Tamboara", "Tapira", "Ubiratã"];
+
+// ===================== EQUIPES POR GR =====================
+const GR_EQUIPES = {
+  'GRMA': { label: 'GRMA — Maringá', equipes: [
+    { nome: 'VTO Manutenção',    codigo: '1150' },
+    { nome: 'VTO Equipe interna', codigo: '1151' },
+    { nome: 'VTO 2S',            codigo: '1154' },
+  ]},
+  'GRAP': { label: 'GRAP — Apucarana (Jandaia do Sul)', equipes: [
+    { nome: 'VTO Manutenção',    codigo: '1160' },
+    { nome: 'VTO Equipe interna', codigo: '1161' },
+    { nome: 'VTO 2S',            codigo: '1164' },
+  ]},
+  'GRUM': { label: 'GRUM — Umuarama (Altônia)', equipes: [
+    { nome: 'VTO Manutenção',    codigo: '1180' },
+    { nome: 'VTO Equipe interna', codigo: '1181' },
+    { nome: 'VTO 2S',            codigo: '1184' },
+  ]},
+  'GRCM': { label: 'GRCM — Campo Mourão (Ubiratã)', equipes: [
+    { nome: 'VTO Manutenção',    codigo: '1170' },
+    { nome: 'VTO Equipe interna', codigo: '1171' },
+    { nome: 'VTO 2S',            codigo: '1174' },
+  ]},
+  'GRPV': { label: 'GRPV — Paranavai', equipes: [
+    { nome: 'VTO Manutenção',    codigo: '1190' },
+    { nome: 'VTO Equipe interna', codigo: '1191' },
+    { nome: 'VTO 2S',            codigo: '1194' },
+  ]},
+};
+
+// Mapeamento de município → GR
+const MUNICIPIO_GR = {
+  'Altamira do Paraná': 'GRCM', 'Alto Paraná': 'GRPV', 'Altônia': 'GRUM',
+  'Amaporã': 'GRPV', 'Barbosa Ferraz': 'GRMA', 'Boa Esperança': 'GRCM',
+  'Bom Sucesso': 'GRMA', 'Brasilândia do Sul': 'GRUM', 'Campina da Lagoa': 'GRCM',
+  'Diamante do Norte': 'GRPV', 'Engenheiro Beltrão': 'GRMA', 'Esperança Nova': 'GRUM',
+  'Farol': 'GRCM', 'Fênix': 'GRMA', 'Floresta': 'GRMA', 'Goioerê': 'GRCM',
+  'Guairaçá': 'GRPV', 'Guaporema': 'GRUM', 'Icaraíma': 'GRUM', 'Inajá': 'GRPV',
+  'Indianópolis': 'GRUM', 'Iporã': 'GRUM', 'Iretama': 'GRCM', 'Itaúna do Sul': 'GRPV',
+  'Ivatuba': 'GRMA', 'Jandaia do Sul': 'GRAP', 'Janiópolis': 'GRCM', 'Juranda': 'GRCM',
+  'Mandaguaçu': 'GRMA', 'Maria Helena': 'GRUM', 'Marilena': 'GRPV', 'Mato Rico': 'GRCM',
+  'Mirador': 'GRPV', 'Nova Aliança do Ivaí': 'GRPV', 'Nova Cantu': 'GRCM',
+  'Ourizona': 'GRMA', 'Paranacity': 'GRPV', 'Planaltina do Paraná': 'GRPV',
+  'Quarto Centenário': 'GRCM', 'Rancho Alegre': 'GRPV', 'Roncador': 'GRCM',
+  'Santa Fé': 'GRMA', 'Santo Antonio do Caiuá': 'GRPV', 'São Pedro do Paraná': 'GRPV',
+  'São Tomé': 'GRMA', 'Tamboara': 'GRPV', 'Tapira': 'GRUM', 'Ubiratã': 'GRCM',
+};
+
+function getEquipesForMunicipio(municipio) {
+  const gr = MUNICIPIO_GR[municipio];
+  if (!gr || !GR_EQUIPES[gr]) return null;
+  return { gr, ...GR_EQUIPES[gr] };
+}
+
+function buildEquipeSelect(r, id, onChange) {
+  const info = getEquipesForMunicipio(r.municipio);
+  if (!info) return '<span style="font-size:12px;color:var(--text3);">GR não identificada</span>';
+  const options = info.equipes.map(eq =>
+    `<option value="${eq.codigo}" ${r.equipe === eq.codigo ? 'selected' : ''}>${eq.nome} (${eq.codigo})</option>`
+  ).join('');
+  return `<select class="form-select" id="${id}" onchange="${onChange}" style="font-size:12px;">
+    <option value="">— Selecione a equipe —</option>
+    ${options}
+  </select>`;
+}
+
+function getEquipeLabel(r) {
+  const info = getEquipesForMunicipio(r.municipio);
+  if (!info || !r.equipe) return '—';
+  const eq = info.equipes.find(e => e.codigo === r.equipe);
+  return eq ? `${eq.nome} (${eq.codigo})` : r.equipe;
+}
 const SUCCESS_CODES = ['11','12'];
 const CLOSED_CODES  = ['51','52','53','54','58','59','77','88','74'];
 const REVISITA_SEM_MULTA = ['52','53','75','76','77']; // Revisita sem multa — sem morador
@@ -932,7 +1016,7 @@ function loadRecords() {
         const old = JSON.parse(saved);
         const userFields = ['baixada','baixada_tipo','baixada_em','sanepar_notificado',
           'sanepar_multa','obs','v1_data','v1_hora','v1_resultado','v2_data','v2_hora',
-          'v2_resultado','v3_data','v3_hora','v3_resultado','resultado_final','abertura','vencimento'];
+          'v2_resultado','v3_data','v3_hora','v3_resultado','resultado_final','abertura','vencimento','equipe'];
         old.forEach(o => {
           // Match by protocolo first, then matricula
           const found = base.find(r => r.protocolo && r.protocolo === o.protocolo)
@@ -969,11 +1053,35 @@ function initNovaASE() {
       if (m === 'Ubiratã') o.selected = true;
       sel.appendChild(o);
     });
+    // Popular equipes para o município pré-selecionado
+    updateNovaASEEquipes();
+  }
+}
+
+function updateNovaASEEquipes() {
+  const municipio = document.getElementById('nova-municipio')?.value;
+  const equipeSelect = document.getElementById('nova-equipe');
+  if (!equipeSelect) return;
+  equipeSelect.innerHTML = '<option value="">-- Selecione a equipe --</option>';
+  if (!municipio) return;
+  const info = getEquipesForMunicipio(municipio);
+  if (info) {
+    info.equipes.forEach(eq => {
+      const o = document.createElement('option');
+      o.value = eq.codigo;
+      o.textContent = `${eq.nome} (${eq.codigo})`;
+      equipeSelect.appendChild(o);
+    });
+  } else {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = 'GR não identificada para este município';
+    equipeSelect.appendChild(o);
   }
 }
 
 function limparNovaASE() {
-  ['nova-matricula','nova-protocolo','nova-abertura','nova-vencimento','nova-hidrometro']
+  ['nova-matricula','nova-protocolo','nova-abertura','nova-vencimento','nova-hidrometro','nova-equipe']
     .forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   const msg = document.getElementById('nova-ase-msg');
   if (msg) msg.innerHTML = '';
@@ -987,6 +1095,7 @@ function salvarNovaASE() {
   const abertura   = document.getElementById('nova-abertura')?.value;
   const vencimento = document.getElementById('nova-vencimento')?.value;
   const hidrometro = document.getElementById('nova-hidrometro')?.value.trim();
+  const equipe     = document.getElementById('nova-equipe')?.value || null;
   const msg        = document.getElementById('nova-ase-msg');
 
   if (!matricula) { msg.innerHTML='<div class="alert-bar warning">⚠ Matrícula é obrigatória.</div>'; return; }
@@ -1004,7 +1113,7 @@ function salvarNovaASE() {
   const novaASE = {
     servico, abertura: abertura||null, vencimento: vencimento||null,
     matricula, protocolo: protocolo||null, hidrometro: hidrometro||null,
-    municipio, status: null,
+    municipio, status: null, equipe,
     v1_data:null, v1_hora:null, v1_resultado:null,
     v2_previsao:null, v2_data:null, v2_hora:null, v2_resultado:null,
     v3_previsao:null, v3_data:null, v3_hora:null, v3_resultado:null,
@@ -1146,7 +1255,7 @@ function restaurarBackup(input) {
       const base = JSON.parse(JSON.stringify(INITIAL_DATA));
       const userFields = ['baixada','baixada_tipo','baixada_em','sanepar_notificado','sanepar_multa',
         'obs','v1_data','v1_hora','v1_resultado','v2_data','v2_hora','v2_resultado',
-        'v3_data','v3_hora','v3_resultado','resultado_final','abertura','vencimento','municipio'];
+        'v3_data','v3_hora','v3_resultado','resultado_final','abertura','vencimento','municipio','equipe'];
       let restored=0;
       backup.records.forEach(old => {
         const found = (old.protocolo && base.find(r => r.protocolo===old.protocolo))
@@ -1879,6 +1988,11 @@ function openModal(key) {
         <div class="detail-row"><span class="detail-label">Abertura</span><span class="detail-value">${fmtDate(r.abertura)}</span></div>
         <div class="detail-row"><span class="detail-label">Vencimento</span><span class="detail-value">${fmtDate(r.vencimento)}</span></div>
         <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${getStatusBadge(calcStatus(r))}</span></div>
+        <div class="detail-row" style="align-items:center;">
+          <span class="detail-label">Equipe</span>
+          <span class="detail-value" style="flex:1;">${buildEquipeSelect(r, 'modal-equipe-select', `saveModalEquipe('${r.matricula}','${municipio||r.municipio||''}','${r.protocolo||''}')`)}
+          </span>
+        </div>
         ${r.obs ? `<div class="detail-row"><span class="detail-label">Observação</span><span class="detail-value" style="color:var(--text2);font-size:12px;">${r.obs}</span></div>` : ''}
         ${!r.abertura||!r.vencimento ? `<div class="detail-row"><span class="detail-label" style="color:var(--amber);">⚠ Atenção</span><span class="detail-value" style="color:var(--amber);font-size:12px;">${!r.abertura?'Data de abertura não preenchida. ':''}${!r.vencimento?'Data de vencimento não preenchida.':''}</span></div>` : ''}
       </div>
@@ -2030,6 +2144,17 @@ function closeModal(e) { if(e.target===document.getElementById('modal-overlay'))
 function closeModalDirect() { document.getElementById('modal-overlay').classList.remove('open'); }
 function openRegistrarFromModal() { closeModalDirect(); const parts = currentModalMatricula.split('+'); const mat = parts[0]; const prot = parts[2]||''; openRegistrar(mat, prot); }
 
+function saveModalEquipe(matricula, municipio, protocolo) {
+  const sel = document.getElementById('modal-equipe-select');
+  if (!sel) return;
+  let r;
+  if (protocolo) r = RECORDS.find(x => x.protocolo === protocolo && x.matricula === matricula);
+  if (!r) r = RECORDS.find(x => x.matricula === matricula && (!municipio || x.municipio === municipio));
+  if (!r) return;
+  r.equipe = sel.value || null;
+  saveRecords();
+}
+
 // ===================== FORM =====================
 let selectedASE = null, formStep = 1;
 
@@ -2138,6 +2263,22 @@ function selectASE(key) {
       <span id="datas-save-msg" style="font-size:11px;color:var(--text3);font-family:var(--mono);"></span>
     </div>
     ${histHtml ? `<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;"><div class="form-label" style="margin-bottom:4px;">Visitas registradas</div>${histHtml}</div>` : ''}`;
+
+  // Popular select de equipe baseado no município da ASE
+  const equipeInfo = getEquipesForMunicipio(r.municipio);
+  const equipeSelect = document.getElementById('f-equipe');
+  if (equipeSelect) {
+    equipeSelect.innerHTML = '<option value="">— Selecione a equipe —</option>';
+    if (equipeInfo) {
+      equipeInfo.equipes.forEach(eq => {
+        const opt = document.createElement('option');
+        opt.value = eq.codigo;
+        opt.textContent = `${eq.nome} (${eq.codigo})`;
+        if (r.equipe === eq.codigo) opt.selected = true;
+        equipeSelect.appendChild(opt);
+      });
+    }
+  }
 
   preencherVisita(visNum);
   setFormStep(2);
@@ -2271,6 +2412,10 @@ function saveVisit() {
   if (novaAbertura) r.abertura = novaAbertura;
   if (novoVencimento) r.vencimento = novoVencimento;
 
+  // Salvar equipe selecionada
+  const equipeVal = document.getElementById('f-equipe')?.value;
+  if (equipeVal) r.equipe = equipeVal;
+
   // Save to correct visit slot
   if (visita===1) { r.v1_data=data; r.v1_hora=hora; r.v1_resultado=resultado; }
   else if (visita===2) { r.v2_data=data; r.v2_hora=hora; r.v2_resultado=resultado; }
@@ -2334,7 +2479,7 @@ function renderBaixadas() {
 
   const tb = document.getElementById('tb-baixadas');
   if (!baixadas.length) {
-    tb.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--text3);">Nenhuma ASE baixada ainda.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text3);">Nenhuma ASE baixada ainda.</td></tr>';
     return;
   }
   tb.innerHTML = baixadas.map(r => {
@@ -2344,6 +2489,7 @@ function renderBaixadas() {
     const tipoBadge = r.baixada_tipo==='finalizada'
       ? '<span class="badge badge-green">✓ Finalizada</span>'
       : '<span class="badge badge-amber">⏱ Reagendada</span>';
+    const equipeLabel = r.equipe ? `<span class="badge badge-blue" style="font-size:10px;">${r.equipe}</span>` : '<span style="color:var(--text3);font-size:11px;">—</span>';
     return `<tr onclick="openModal('${r.matricula}+${r.municipio||''}')" style="cursor:pointer;">
       <td style="font-size:11px;">${r.municipio||'—'}</td>
       <td class="mono" style="color:var(--text);font-weight:500;">${r.matricula}</td>
@@ -2355,6 +2501,7 @@ function renderBaixadas() {
       <td>${tipoBadge}</td>
       <td class="mono" style="color:var(--green);">${fmtDate(r.baixada_em)}</td>
       <td class="mono">${nextAse ? fmtDate(nextAse)+' '+daysChip(daysFrom(nextAse),'') : '—'}</td>
+      <td>${equipeLabel}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openModal('${r.matricula}+${r.municipio||''}')">Ver</button></td>
     </tr>`;
   }).join('');
@@ -2394,7 +2541,7 @@ function exportBaixadasCSV() {
   if (!baixadas.length) { alert('Nenhuma ASE baixada para exportar.'); return; }
   const rows = [['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
     '1ª Data','1ª Resultado','2ª Data','2ª Resultado','3ª Data','3ª Resultado',
-    'Resultado Final','Tipo Baixa','Data Baixa','Próxima ASE']];
+    'Resultado Final','Tipo Baixa','Data Baixa','Próxima ASE','Equipe','Cód.Equipe']];
   baixadas.forEach(r => {
     const lastDate = r.v3_data||r.v2_data||r.v1_data||'';
     const nextAse = r.baixada_tipo==='reagendada' ? addDays(lastDate,60) : '';
@@ -2402,7 +2549,8 @@ function exportBaixadasCSV() {
       r.abertura||'',r.vencimento||'',
       r.v1_data||'',r.v1_resultado||'',r.v2_data||'',r.v2_resultado||'',
       r.v3_data||'',r.v3_resultado||'',r.resultado_final||'',
-      r.baixada_tipo||'',r.baixada_em||'',nextAse||'']);
+      r.baixada_tipo||'',r.baixada_em||'',nextAse||'',
+      getEquipeLabel(r), r.equipe||'']);
   });
   const csv = rows.map(r=>r.map(c=>'"'+(c||'').toString().replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
@@ -2417,7 +2565,8 @@ function exportCSV() {
     'Status','1ª Data','1ª Hora','1ª Resultado',
     '2ª Data','2ª Hora','2ª Resultado',
     '3ª Data','3ª Hora','3ª Resultado',
-    'Resultado Final','Baixada','Tipo Baixa','Data Baixa','Observação']];
+    'Resultado Final','Baixada','Tipo Baixa','Data Baixa','Observação',
+    'Equipe','Cód.Equipe']];
   recs.forEach(r => {
     rows.push([
       r.municipio||'', r.matricula||'', r.protocolo||'', r.servico||'',
@@ -2428,7 +2577,8 @@ function exportCSV() {
       r.v3_data||'', r.v3_hora||'', r.v3_resultado||'',
       r.resultado_final||'',
       r.baixada ? 'SIM' : 'NÃO', r.baixada_tipo||'', r.baixada_em||'',
-      r.obs||''
+      r.obs||'',
+      getEquipeLabel(r), r.equipe||''
     ]);
   });
   const csv = rows.map(r => r.map(c => '"' + String(c||'').replace(/"/g,'""') + '"').join(',')).join('\n');
@@ -2443,7 +2593,7 @@ function exportMedicaoCSV() {
   // Collect ALL visits in the selected month with full record data
   const rows = [['Município','Matrícula','Protocolo','Serviço','Abertura','Vencimento',
     'Nº Visita','Data Visita','Hora Visita','Resultado','Conta Medição',
-    'Status ASE','Baixada','Tipo Baixa','Data Baixa']];
+    'Status ASE','Baixada','Tipo Baixa','Data Baixa','Equipe','Cód.Equipe']];
   RECORDS.forEach(r => {
     [['v1_data','v1_hora','v1_resultado','1ª'],
      ['v2_data','v2_hora','v2_resultado','2ª'],
@@ -2455,7 +2605,8 @@ function exportMedicaoCSV() {
           num, r[dk]||'', r[hk]||'', r[rk]||'',
           countsMedicao(r[rk]) ? 'SIM' : 'NÃO',
           calcStatus(r), r.baixada ? 'SIM' : 'NÃO',
-          r.baixada_tipo||'', r.baixada_em||''
+          r.baixada_tipo||'', r.baixada_em||'',
+          getEquipeLabel(r), r.equipe||''
         ]);
       }
     });
@@ -2726,36 +2877,83 @@ function processFile(file) {
   const status = document.getElementById('import-status');
   status.innerHTML = '<div class="alert-bar info">⏳ Processando arquivo...</div>';
 
+  const isCsv = file.name.toLowerCase().endsWith('.csv') ||
+                file.type === 'text/csv' ||
+                file.type === 'application/vnd.ms-excel' && file.name.toLowerCase().endsWith('.csv');
+
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
-      const sheetName = wb.SheetNames.find(n => n.toUpperCase().startsWith('VTO')) || wb.SheetNames[0];
-      const ws = wb.Sheets[sheetName];
-      if (!ws) { status.innerHTML='<div class="alert-bar danger">❌ Nenhuma aba encontrada.</div>'; return; }
-      const raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, dateNF:'yyyy-mm-dd'});
+      let raw; // array de arrays (linhas × colunas)
 
-      function cleanVal(v) {
-        if (v===undefined||v===null||v===''||v==='-'||v==='NaN') return null;
-        return String(v).trim();
+      if (isCsv) {
+        // ── Parsear CSV manualmente (suporte a vírgula e ponto-e-vírgula, aspas) ──
+        const text = e.target.result;
+        function parseCsvText(txt) {
+          // Detectar separador: se tiver mais ";" do que "," na primeira linha, usa ";"
+          const firstLine = txt.split('\n')[0] || '';
+          const sep = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ',';
+          const rows = [];
+          let row = [], cell = '', inQuote = false;
+          for (let i = 0; i < txt.length; i++) {
+            const ch = txt[i];
+            if (inQuote) {
+              if (ch === '"' && txt[i+1] === '"') { cell += '"'; i++; }
+              else if (ch === '"') inQuote = false;
+              else cell += ch;
+            } else {
+              if (ch === '"') { inQuote = true; }
+              else if (ch === sep) { row.push(cell.trim()); cell = ''; }
+              else if (ch === '\n') {
+                row.push(cell.trim()); rows.push(row);
+                row = []; cell = '';
+              } else if (ch !== '\r') { cell += ch; }
+            }
+          }
+          if (cell || row.length) { row.push(cell.trim()); rows.push(row); }
+          return rows.filter(r => r.some(c => c !== ''));
+        }
+        raw = parseCsvText(text);
+      } else {
+        // ── XLSX / XLS ──
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.find(n => n.toUpperCase().startsWith('VTO')) || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) { status.innerHTML='<div class="alert-bar danger">❌ Nenhuma aba encontrada.</div>'; return; }
+        raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, dateNF:'yyyy-mm-dd'});
       }
+
       function cleanDate(v) {
         if (!v) return null;
         const s = String(v).trim();
         if (!s||s==='-'||s==='null'||s==='undefined') return null;
 
-        // Format: YYYY-MM-DD (with optional time)
+        // Número serial do Excel (inteiro ou decimal como 46101.686...) — checar PRIMEIRO
+        // pois evita confundir serial com ano (ex: "46169" vs "2026-...")
+        const numVal = parseFloat(s);
+        if (!isNaN(numVal) && numVal > 40000 && numVal < 60000) {
+          // Converter serial do Excel para data (parte inteira = dias desde 1899-12-30)
+          const serial = Math.floor(numVal);
+          const excelEpoch = new Date(1899, 11, 30);
+          const d = new Date(excelEpoch.getTime() + serial * 86400000);
+          if (!isNaN(d.getTime())) {
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          }
+        }
+
+        // Format: YYYY-MM-DD (with optional time) — ISO
         let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (m) return `${m[1]}-${m[2]}-${m[3]}`;
 
-        // Format: MM/DD/YYYY or DD/MM/YYYY (American or Brazilian)
+        // Format: DD/MM/YYYY ou MM/DD/YYYY
         m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
         if (m) {
           const [_, a, b, y] = m;
-          // If first part > 12, it's DD/MM/YYYY
-          if (parseInt(a) > 12) return `${y}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`;
-          // Otherwise assume MM/DD/YYYY (XLSX default)
-          return `${y}-${a.padStart(2,'0')}-${b.padStart(2,'0')}`;
+          const ai = parseInt(a), bi = parseInt(b);
+          if (ai > 12) return `${y}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`;
+          if (bi > 12) return `${y}-${a.padStart(2,'0')}-${b.padStart(2,'0')}`;
+          // Ambos <= 12: assume DD/MM/YYYY (padrão BR)
+          return `${y}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`;
         }
 
         // Format: DD-Mon-YYYY (e.g. 05-Feb-2026)
@@ -2772,36 +2970,53 @@ function processFile(file) {
         return null;
       }
 
-      // Detect format by checking header row
-      const flatFirst = raw.slice(0,5).map(r=>(r||[]).join('|').toUpperCase()).join('|');
-      const isSimple = flatFirst.includes('SERVI') && flatFirst.includes('MATRI') && flatFirst.includes('VENCIMENTO');
+      // Limpar valor de célula — incluindo notação científica de protocolos longos
+      function cleanVal(v) {
+        if (v===undefined||v===null||v===''||v==='-'||v==='NaN') return null;
+        const s = String(v).trim();
+        // Detectar notação científica (ex: 2.02604140932084E+16) → converter para inteiro
+        if (/^[\d.]+[eE][+\-]?\d+$/.test(s)) {
+          try {
+            const n = parseFloat(s);
+            if (!isNaN(n) && isFinite(n)) return Math.round(n).toString();
+          } catch(e) {}
+        }
+        return s;
+      }
+
+      // Normaliza string para comparação: remove acentos + maiúsculo
+      function normHdr(s) {
+        return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+      }
+
+      // Detecta formato varrendo até 10 linhas (ignora linhas vazias no topo)
+      const flatFirst = raw.slice(0,10).map(r=>(r||[]).map(normHdr).join('|')).join('|');
+      const isSimple = flatFirst.includes('SERVI') && flatFirst.includes('MATRI') && flatFirst.includes('VENCI');
       const newRecs = [];
 
       if (isSimple) {
         // Simple format: SERVIÇO | ABERTURA | VENCIMENTO | MATRÍCULA | PROTOCOLO | MUNICÍPIO
+        // Busca linha de cabeçalho em até 15 linhas (planilha pode ter linhas vazias no topo)
         let hRow = 0;
-        for (let i=0; i<Math.min(raw.length,5); i++) {
-          if ((raw[i]||[]).some(c => String(c||'').toUpperCase().includes('MATRI'))) { hRow=i; break; }
+        for (let i=0; i<Math.min(raw.length,15); i++) {
+          if ((raw[i]||[]).some(c => normHdr(c).includes('MATRI'))) { hRow=i; break; }
         }
-        const hdrs = (raw[hRow]||[]).map(h => String(h||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim());
+        const hdrs = (raw[hRow]||[]).map(h => normHdr(h));
         const ci = name => hdrs.findIndex(h => h.includes(name));
         const iS=ci('SERVI'), iA=ci('ABERTU'), iV=ci('VENCI'), iM=ci('MATRI'), iP=ci('PROTO'), iMu=ci('MUNIC');
         for (let i=hRow+1; i<raw.length; i++) {
           const row = raw[i] || [];
           const mat = cleanVal(row[iM>=0?iM:3]);
           if (!mat) continue;
-          const mun = cleanVal(row[iMu>=0?iMu:5]);
-          // Normalize município — match case-insensitively to known list
-          const munNorm = mun ? (MUNICIPIOS.find(m =>
-            m.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'') ===
-            mun.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-          ) || mun) : inferMunicipio(file.name);
+          const mun = cleanVal(row[iMu>=0?iMu:0]);
+          // Normaliza município: remove acentos + caixa alta → compara com lista
+          const munNorm = mun ? (MUNICIPIOS.find(m => normHdr(m) === normHdr(mun)) || mun) : inferMunicipio(file.name);
           newRecs.push({
-            servico:    cleanVal(row[iS>=0?iS:0]),
-            abertura:   cleanDate(row[iA>=0?iA:1]),
-            vencimento: cleanDate(row[iV>=0?iV:2]),
+            servico:    cleanVal(row[iS>=0?iS:2]),
+            abertura:   cleanDate(row[iA>=0?iA:3]),
+            vencimento: cleanDate(row[iV>=0?iV:4]),
             matricula:  mat,
-            protocolo:  cleanVal(row[iP>=0?iP:4]),
+            protocolo:  cleanVal(row[iP>=0?iP:1]),
             hidrometro: null, status: null,
             v1_data:null, v1_hora:null, v1_resultado:null,
             v2_previsao:null, v2_data:null, v2_hora:null, v2_resultado:null,
@@ -2868,7 +3083,29 @@ function processFile(file) {
       console.error(err);
     }
   };
-  reader.readAsArrayBuffer(file);
+  // CSV precisa de texto; XLSX precisa de ArrayBuffer
+  if (isCsv) {
+    // Tenta UTF-8 primeiro; se tiver caracteres inválidos (ç, ã, etc.), relê como Latin-1
+    const readerLatin = new FileReader();
+    readerLatin.onload = function(ev) {
+      // Substituir o resultado do reader principal e disparar onload
+      Object.defineProperty(reader, 'result', { get: () => ev.target.result, configurable: true });
+      reader.onload({ target: readerLatin });
+    };
+    const readerUtf = new FileReader();
+    readerUtf.onload = function(ev) {
+      const txt = ev.target.result;
+      // Verificar se tem caracteres de replacement (U+FFFD) — sinal de encoding errado
+      if (txt.includes('\uFFFD')) {
+        readerLatin.readAsText(file, 'windows-1252');
+      } else {
+        reader.onload({ target: { result: txt } });
+      }
+    };
+    readerUtf.readAsText(file, 'UTF-8');
+  } else {
+    reader.readAsArrayBuffer(file);
+  }
 }
 
 
@@ -2928,6 +3165,8 @@ const COLS_BASIC = [
   {label:'Vencimento', fn: r => fmtDate(r.vencimento)},
   {label:'Status',     fn: r => calcStatus(r)},
   {label:'Resultado',  fn: r => r.v3_resultado||r.v2_resultado||r.v1_resultado||'—'},
+  {label:'Equipe',     fn: r => getEquipeLabel(r)},
+  {label:'Cód.Equipe', key:'equipe'},
 ];
 const COLS_BAIXADA = [
   {label:'Município',  key:'municipio'},
@@ -2937,6 +3176,8 @@ const COLS_BAIXADA = [
   {label:'Tipo Baixa', key:'baixada_tipo'},
   {label:'Data Baixa', fn: r => fmtDate(r.baixada_em)},
   {label:'Resultado',  fn: r => r.v3_resultado||r.v2_resultado||r.v1_resultado||'—'},
+  {label:'Equipe',     fn: r => getEquipeLabel(r)},
+  {label:'Cód.Equipe', key:'equipe'},
 ];
 
 
